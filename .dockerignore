@@ -1,0 +1,9 @@
+.git
+.idea
+.vscode
+out
+*.out
+*.test
+coverage.*
+go.work
+go.work.sum

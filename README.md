@@ -1,0 +1,118 @@
+# nvidia-smi-web-ui
+
+CLI-first Go backend foundation for collecting NVIDIA GPU information through NVML.
+
+The project currently provides a local CLI similar in spirit to `nvidia-smi`. The code is structured so the same GPU client and DTOs can later be reused by an HTTP API and web UI.
+
+## Requirements
+
+- Go 1.26.3 or newer toolchain.
+- Linux host with NVIDIA drivers and `libnvidia-ml.so.1` available at runtime.
+- NVIDIA GPU visible to NVML.
+- Docker GPU execution requires NVIDIA Container Toolkit and `docker run --gpus all`.
+
+The project can compile and run unit tests on non-GPU machines. Real NVML commands must run on a machine with NVIDIA drivers.
+
+## Local Usage
+
+Show CLI help:
+
+```bash
+go run main.go
+```
+
+List GPUs:
+
+```bash
+go run main.go list
+```
+
+List GPUs as JSON:
+
+```bash
+go run main.go list --json
+```
+
+Inspect one GPU by index or UUID:
+
+```bash
+go run main.go inspect --id 0
+go run main.go inspect --uuid GPU-00000000-0000-0000-0000-000000000000
+```
+
+List GPU processes:
+
+```bash
+go run main.go processes
+```
+
+Useful flags:
+
+- `--json`: render machine-readable JSON.
+- `--warnings`: include per-field NVML collection warnings in table mode.
+- `--no-processes`: skip process collection for `list` and `inspect`.
+
+Unsupported metrics do not fail the whole command. They are recorded as warnings because NVML support differs by GPU generation, driver version, MIG mode, permissions, and platform.
+
+## Make Commands
+
+```bash
+make run
+make fmt
+make lint
+make tests
+make docker-build
+make docker-run
+```
+
+`make tests` uses `gotest.tools/gotestsum@latest` as requested.
+
+## Docker
+
+Build the image:
+
+```bash
+make docker-build
+```
+
+Run on a GPU host:
+
+```bash
+docker run --rm --gpus all nvidia-smi-web-ui:latest list
+docker run --rm --gpus all nvidia-smi-web-ui:latest list --json
+```
+
+The runtime image defaults to `nvidia/cuda:13.0.1-base-ubuntu24.04` and can be overridden:
+
+```bash
+docker build \
+  --build-arg CUDA_RUNTIME_IMAGE=nvidia/cuda:13.2.1-base-ubuntu24.04 \
+  -t nvidia-smi-web-ui:latest .
+```
+
+## Architecture
+
+- `main.go`: thin entrypoint with signal-aware context.
+- `cmd/...`: Cobra command wiring.
+- `app/gpu`: use-case layer for CLI and future API transports.
+- `pkg/nvmlclient`: NVML lifecycle, hardware adapter, snapshot collection, warnings.
+- `pkg/gpuinfo`: exported DTOs intended for future HTTP responses.
+- `pkg/output`: JSON and table rendering.
+
+The NVML client initializes NVML once per command and shuts it down at the same ownership level. Fatal errors are limited to initialization, device count, and device handle lookup. Optional per-metric failures become structured warnings.
+
+## Testing
+
+Run unit tests:
+
+```bash
+make tests
+```
+
+Run the optional integration test on a Linux GPU host:
+
+```bash
+NVML_INTEGRATION=1 go test ./pkg/nvmlclient -run TestIntegrationNVML -count=1
+```
+
+The default test suite uses fake NVML implementations, so it does not require GPU hardware.
