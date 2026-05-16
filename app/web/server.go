@@ -17,14 +17,17 @@ const (
 
 // Config contains web server settings.
 type Config struct {
-	Addr string
+	Addr             string
+	SnapshotProvider webui.SnapshotProvider
+	Branding         string
+	Title            string
 }
 
 // Run starts the web UI HTTP server and blocks until the server exits or ctx is canceled.
 func Run(ctx context.Context, config Config) error {
 	server := &http.Server{
 		Addr:              config.listenAddr(),
-		Handler:           webui.NewHandler(),
+		Handler:           webui.NewHandler(config.handlerConfig()),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
@@ -58,4 +61,12 @@ func (config Config) listenAddr() string {
 		return defaultAddr
 	}
 	return config.Addr
+}
+
+func (config Config) handlerConfig() webui.Config {
+	return webui.Config{
+		SnapshotProvider: config.SnapshotProvider,
+		Branding:         config.Branding,
+		Title:            config.Title,
+	}
 }

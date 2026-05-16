@@ -2,8 +2,10 @@ package web
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
+	"github.com/deniskrumko/nvidia-smi-web-ui/app/gpu"
 	webapp "github.com/deniskrumko/nvidia-smi-web-ui/app/web"
 	"github.com/spf13/cobra"
 )
@@ -15,12 +17,19 @@ func New() *cobra.Command {
 		Use:   "web",
 		Short: "Run the local web UI",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			_, err := fmt.Fprintf(cmd.OutOrStdout(), "Serving web UI at http://%s\n", displayAddr(addr))
-			if err != nil {
-				return err
-			}
+			return gpu.WithService(func(service *gpu.Service) error {
+				_, err := fmt.Fprintf(cmd.OutOrStdout(), "Serving web UI at http://%s\n", displayAddr(addr))
+				if err != nil {
+					return err
+				}
 
-			return webapp.Run(cmd.Context(), webapp.Config{Addr: addr})
+				return webapp.Run(cmd.Context(), webapp.Config{
+					Addr:             addr,
+					SnapshotProvider: service,
+					Branding:         os.Getenv("WEB_PAGE_BRANDING"),
+					Title:            pageTitle(),
+				})
+			})
 		},
 	}
 	command.Flags().StringVar(&addr, "addr", ":8080", "HTTP listen address")
@@ -32,4 +41,11 @@ func displayAddr(addr string) string {
 		return "localhost" + addr
 	}
 	return addr
+}
+
+func pageTitle() string {
+	if title := os.Getenv("WEB_PAGE_TITLE"); title != "" {
+		return title
+	}
+	return os.Getenv("WEB_PAGE_BRANDING")
 }

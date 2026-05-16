@@ -1,8 +1,8 @@
 # nvidia-smi-web-ui
 
-CLI-first Go backend foundation for collecting NVIDIA GPU information through NVML.
+CLI-first Go backend foundation and local web UI for collecting NVIDIA GPU information through NVML.
 
-The project currently provides a local CLI similar in spirit to `nvidia-smi`. The code is structured so the same GPU client and DTOs can later be reused by an HTTP API and web UI.
+The project currently provides a local CLI similar in spirit to `nvidia-smi` plus a single-page monitoring dashboard for live GPU charts.
 
 ## Requirements
 
@@ -46,10 +46,19 @@ List GPU processes:
 go run main.go processes
 ```
 
-Run the local web UI skeleton:
+Run the local web UI:
 
 ```bash
 go run main.go web
+```
+
+The web UI serves a stateless API at `/api/gpus` and keeps chart history only in the memory of the open browser tab. Refreshing or closing the tab clears the collected chart data.
+
+Optional web UI branding:
+
+```bash
+WEB_PAGE_BRANDING="Server GPU Monitor" go run main.go web
+WEB_PAGE_TITLE="GPU Dashboard" WEB_PAGE_BRANDING="Server GPU Monitor" go run main.go web
 ```
 
 Useful flags:
@@ -64,7 +73,7 @@ Unsupported metrics do not fail the whole command. They are recorded as warnings
 
 ```bash
 make run
-make run-web
+make web
 make fmt
 make lint
 make tests
@@ -114,7 +123,7 @@ docker build -f Dockerfile.cuda -t nvidia-smi-web-ui:cuda .
 - `pkg/nvmlclient`: NVML lifecycle, hardware adapter, snapshot collection, warnings.
 - `pkg/gpuinfo`: exported DTOs intended for future HTTP responses.
 - `pkg/output`: JSON and table rendering.
-- `pkg/webui`: server-rendered HTML handlers, templates, and static assets.
+- `pkg/webui`: server-rendered HTML shell, stateless JSON API handlers, templates, and static assets.
 
 The NVML client initializes NVML once per command and shuts it down at the same ownership level. Fatal errors are limited to initialization, device count, and device handle lookup. Optional per-metric failures become structured warnings.
 
