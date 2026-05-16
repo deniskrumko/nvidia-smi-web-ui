@@ -2,22 +2,24 @@
   const metrics = [
     {
       id: "memory",
-      title: "Memory",
-      subtitle: "Used GPU memory",
+      title: "Memory usage",
       unit: "GiB",
       domain: "auto",
       value(device) {
         return device.memory ? bytesToGiB(device.memory.used_bytes) : null;
       },
+      tooltip(device) {
+        if (!device.memory) return "n/a";
+        return `${formatNumber(bytesToMiB(device.memory.used_bytes))} MB`;
+      },
       detail(device) {
         if (!device.memory) return "n/a";
-        return `${bytesToGiB(device.memory.used_bytes).toFixed(2)} / ${bytesToGiB(device.memory.total_bytes).toFixed(2)} GiB`;
+        return `${bytesToGiB(device.memory.used_bytes).toFixed(2)}/${bytesToGiB(device.memory.total_bytes).toFixed(2)} GiB`;
       },
     },
     {
       id: "gpu-util",
-      title: "GPU Util",
-      subtitle: "SM activity",
+      title: "GPU utilization (%)",
       unit: "%",
       domain: [0, 100],
       value(device) {
@@ -26,8 +28,7 @@
     },
     {
       id: "mem-util",
-      title: "MEM Util",
-      subtitle: "Memory controller activity",
+      title: "Memory utilization (%)",
       unit: "%",
       domain: [0, 100],
       value(device) {
@@ -37,7 +38,6 @@
     {
       id: "temp",
       title: "Temperature",
-      subtitle: "GPU core temperature",
       unit: "C",
       domain: "auto",
       value(device) {
@@ -46,8 +46,7 @@
     },
     {
       id: "power",
-      title: "Power",
-      subtitle: "Current board draw",
+      title: "Power usage",
       unit: "W",
       domain: "auto",
       value(device) {
@@ -57,8 +56,7 @@
     },
     {
       id: "fan",
-      title: "Fan",
-      subtitle: "Fan speed",
+      title: "Fan speed",
       unit: "%",
       domain: [0, 100],
       value(device) {
@@ -67,39 +65,59 @@
     },
   ];
 
+  const defaultChartIds = ["memory", "gpu-util", "mem-util", "temp"];
   const colors = ["#1f6fdb", "#dc5f00", "#179a63", "#8b5cf6", "#c2415d", "#0f8b8d", "#6d7d00", "#9b4d96"];
   const chartMap = new Map(metrics.map((metric) => [metric.id, metric]));
-  const root = document.querySelector(".app-shell");
+  const chartParamMap = new Map(metrics.map((metric, index) => [metric.id, String(index + 1)]));
 
   const dom = {
+    brandReset: document.querySelector("[data-brand-reset]"),
+    dropdowns: [...document.querySelectorAll("[data-dropdown]")],
+    gpuDropdown: document.querySelector('[data-dropdown="gpu"]'),
+    chartDropdown: document.querySelector('[data-dropdown="charts"]'),
+    timeDropdown: document.querySelector('[data-dropdown="time"]'),
+    gpuTrigger: document.querySelector("[data-gpu-trigger]"),
+    gpuSummary: document.querySelector("[data-gpu-summary]"),
+    chartTrigger: document.querySelector("[data-chart-trigger]"),
+    chartSummary: document.querySelector("[data-chart-summary]"),
+    chartList: document.querySelector("[data-chart-list]"),
+    timeMinutes: document.querySelector("[data-time-minutes]"),
     statusDot: document.querySelector("[data-status-dot]"),
     statusLabel: document.querySelector("[data-status-label]"),
     deviceList: document.querySelector("[data-device-list]"),
     selectAll: document.querySelector("[data-select-all]"),
-    refreshEnabled: document.querySelector("[data-refresh-enabled]"),
+    clearAll: document.querySelector("[data-clear-all]"),
+    chartSelectAll: document.querySelector("[data-chart-select-all]"),
+    chartClearAll: document.querySelector("[data-chart-clear-all]"),
     refreshInterval: document.querySelector("[data-refresh-interval]"),
-    timeWindow: document.querySelector("[data-time-window]"),
     refreshNow: document.querySelector("[data-refresh-now]"),
+    timeInputLabel: document.querySelector(".time-input-label"),
+    timePresets: [...document.querySelectorAll("[data-time-preset]")],
     summary: document.querySelector("[data-summary]"),
     charts: document.querySelector("[data-charts]"),
   };
 
   const params = new URLSearchParams(window.location.search);
   const initialGPUParam = params.get("gpu");
+  const initialChartIds = parseChartParam(params.get("charts"));
+  const initialFocusedChart = parseChartIDParam(params.get("chart"));
   const state = {
     samples: [],
     devices: new Map(),
-    selectedIds: new Set(initialGPUParam ? initialGPUParam.split(",").filter(Boolean) : []),
+    selectedIds: new Set(parseGPUParam(initialGPUParam)),
+    selectedChartIds: new Set(initialChartIds === null ? defaultChartIds : initialChartIds),
     explicitSelection: Boolean(initialGPUParam),
-    focusedChart: chartMap.has(params.get("chart")) ? params.get("chart") : null,
+    focusedChart: initialFocusedChart,
     hoverTime: null,
-    refreshEnabled: true,
-    refreshInterval: 5000,
-    timeWindow: "all",
-    zoom: null,
+    refreshInterval: 1000,
+    timeWindow: 300000,
     timer: 0,
     fetching: false,
+    lastUpdate: null,
   };
+  if (state.focusedChart && !state.selectedChartIds.has(state.focusedChart)) {
+    state.focusedChart = null;
+  }
 
   const charts = new Map();
   const tooltip = document.createElement("div");
@@ -108,6 +126,8 @@
 
   renderChartShells();
   bindControls();
+  renderChartSelector();
+  renderControlSummaries();
   fetchSnapshot();
   scheduleRefresh();
   window.addEventListener("resize", renderAll);
@@ -118,6 +138,35 @@
   });
 
   function bindControls() {
+    dom.brandReset.addEventListener("click", (event) => {
+      event.preventDefault();
+      resetToDefaults();
+    });
+
+    dom.gpuTrigger.addEventListener("click", () => toggleDropdown(dom.gpuDropdown));
+    dom.chartTrigger.addEventListener("click", () => toggleDropdown(dom.chartDropdown));
+    dom.timeInputLabel.addEventListener("click", () => focusTimeInput());
+    dom.timeMinutes.addEventListener("focus", () => openDropdown(dom.timeDropdown, false));
+    dom.timeMinutes.addEventListener("change", applyTimeInput);
+    dom.timeMinutes.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        applyTimeInput();
+        dom.timeMinutes.blur();
+        closeDropdowns();
+      }
+    });
+
+    document.addEventListener("click", (event) => {
+      if (dom.dropdowns.some((dropdown) => dropdown.contains(event.target))) return;
+      closeDropdowns();
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        closeDropdowns();
+      }
+    });
+
     dom.selectAll.addEventListener("click", () => {
       state.explicitSelection = false;
       state.selectedIds = new Set(state.devices.keys());
@@ -125,21 +174,43 @@
       renderAll();
     });
 
-    dom.refreshEnabled.addEventListener("change", () => {
-      state.refreshEnabled = dom.refreshEnabled.value === "on";
-      scheduleRefresh();
-      setStatus(state.refreshEnabled ? "ok" : "warn", state.refreshEnabled ? "Auto refresh on" : "Auto refresh paused");
+    dom.clearAll.addEventListener("click", () => {
+      state.explicitSelection = true;
+      state.selectedIds = new Set();
+      updateURL();
+      renderAll();
+    });
+
+    dom.chartSelectAll.addEventListener("click", () => {
+      state.selectedChartIds = new Set(metrics.map((metric) => metric.id));
+      updateURL();
+      renderChartSelector();
+      renderChartShells();
+      renderAll();
+    });
+
+    dom.chartClearAll.addEventListener("click", () => {
+      state.selectedChartIds = new Set();
+      state.focusedChart = null;
+      updateURL();
+      renderChartSelector();
+      renderChartShells();
+      renderAll();
     });
 
     dom.refreshInterval.addEventListener("change", () => {
       state.refreshInterval = Number(dom.refreshInterval.value);
       scheduleRefresh();
+      updateStatus();
     });
 
-    dom.timeWindow.addEventListener("change", () => {
-      state.timeWindow = dom.timeWindow.value;
-      state.zoom = null;
-      renderAll();
+    dom.timePresets.forEach((button) => {
+      button.addEventListener("click", () => {
+        const minutes = Number(button.dataset.timePreset);
+        setTimeWindowMinutes(minutes);
+        closeDropdowns();
+        renderAll();
+      });
     });
 
     dom.refreshNow.addEventListener("click", fetchSnapshot);
@@ -147,7 +218,16 @@
 
   function renderChartShells() {
     dom.charts.innerHTML = "";
-    for (const metric of metrics) {
+    charts.clear();
+    const selectedMetrics = metrics.filter((metric) => state.selectedChartIds.has(metric.id));
+    dom.charts.style.setProperty("--chart-rows", String(Math.max(1, Math.ceil(selectedMetrics.length / 2))));
+    dom.charts.dataset.count = String(selectedMetrics.length);
+    if (selectedMetrics.length === 0) {
+      dom.charts.innerHTML = '<div class="empty-charts">No charts selected</div>';
+      return;
+    }
+
+    for (const metric of selectedMetrics) {
       const card = document.createElement("article");
       card.className = "chart-card";
       card.dataset.chart = metric.id;
@@ -158,10 +238,8 @@
       header.innerHTML = `
         <div class="chart-title">
           <h2>${escapeHTML(metric.title)}</h2>
-          <p>${escapeHTML(metric.subtitle)}</p>
         </div>
         <div class="chart-actions">
-          <button type="button" data-reset-zoom>Reset zoom</button>
           <button type="button" data-toggle-fullscreen>${state.focusedChart === metric.id ? "Close" : "Fullscreen"}</button>
         </div>
       `;
@@ -175,10 +253,6 @@
 
       charts.set(metric.id, { metric, card, canvas, wrap });
 
-      header.querySelector("[data-reset-zoom]").addEventListener("click", () => {
-        state.zoom = null;
-        renderAll();
-      });
       header.querySelector("[data-toggle-fullscreen]").addEventListener("click", () => {
         state.focusedChart = state.focusedChart === metric.id ? null : metric.id;
         updateURL();
@@ -191,14 +265,12 @@
         tooltip.classList.remove("is-visible");
         renderAll();
       });
-      canvas.addEventListener("wheel", (event) => handleWheel(event, metric.id), { passive: false });
     }
   }
 
   async function fetchSnapshot() {
     if (state.fetching) return;
     state.fetching = true;
-    setStatus("warn", "Refreshing...");
     try {
       const response = await fetch("/api/gpus", { headers: { Accept: "application/json" } });
       const payload = await response.json();
@@ -206,9 +278,10 @@
         throw new Error(payload.error || `Request failed with status ${response.status}`);
       }
       addSample(payload);
-      setStatus("ok", `Updated ${formatTime(Date.now())}`);
+      state.lastUpdate = Date.now();
+      updateStatus();
     } catch (error) {
-      setStatus("error", error.message);
+      updateStatus("error", error.message);
     } finally {
       state.fetching = false;
       scheduleRefresh();
@@ -226,8 +299,11 @@
       if (!state.devices.has(id)) {
         state.devices.set(id, {
           id,
+          index: device.index,
           label: deviceLabel(device),
+          shortLabel: shortDeviceLabel(device),
           color: colors[state.devices.size % colors.length],
+          aliases: deviceAliases(device, id),
         });
       }
     }
@@ -236,11 +312,7 @@
       state.selectedIds = new Set(state.devices.keys());
     } else {
       const available = new Set(state.devices.keys());
-      state.selectedIds = new Set([...state.selectedIds].filter((id) => available.has(id)));
-      if (state.selectedIds.size === 0 && state.devices.size > 0) {
-        state.explicitSelection = false;
-        state.selectedIds = new Set(state.devices.keys());
-      }
+      state.selectedIds = resolveSelectedDeviceIds(available);
     }
 
     state.samples.push({ time: Number.isFinite(collectedAt) ? collectedAt : Date.now(), devices: normalized });
@@ -249,12 +321,13 @@
 
   function scheduleRefresh() {
     window.clearTimeout(state.timer);
-    if (!state.refreshEnabled) return;
+    if (state.refreshInterval <= 0) return;
     state.timer = window.setTimeout(fetchSnapshot, state.refreshInterval);
   }
 
   function renderAll() {
     renderDevices();
+    renderControlSummaries();
     renderSummary();
     for (const chart of charts.values()) {
       drawChart(chart);
@@ -270,7 +343,7 @@
     dom.deviceList.innerHTML = "";
     for (const device of state.devices.values()) {
       const label = document.createElement("label");
-      label.className = "device-chip";
+      label.className = "device-option";
 
       const input = document.createElement("input");
       input.type = "checkbox";
@@ -282,20 +355,102 @@
         } else {
           state.selectedIds.delete(device.id);
         }
-        if (state.selectedIds.size === 0) {
-          state.selectedIds.add(device.id);
-          input.checked = true;
-        }
         updateURL();
         renderAll();
       });
 
+      const dot = document.createElement("span");
+      dot.className = "color-dot";
+      dot.style.background = device.color;
+
       const text = document.createElement("span");
       text.title = device.label;
       text.textContent = device.label;
-      label.append(input, text);
+
+      label.append(input, dot, text);
       dom.deviceList.appendChild(label);
     }
+  }
+
+  function renderChartSelector() {
+    dom.chartList.innerHTML = "";
+    for (const metric of metrics) {
+      const label = document.createElement("label");
+      label.className = "chart-option";
+
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.checked = state.selectedChartIds.has(metric.id);
+      input.addEventListener("change", () => {
+        if (input.checked) {
+          state.selectedChartIds.add(metric.id);
+        } else {
+          state.selectedChartIds.delete(metric.id);
+        }
+        if (state.focusedChart && !state.selectedChartIds.has(state.focusedChart)) {
+          state.focusedChart = null;
+        }
+        updateURL();
+        renderChartShells();
+        renderAll();
+      });
+
+      const text = document.createElement("span");
+      text.textContent = metric.title;
+      label.append(input, text);
+      dom.chartList.appendChild(label);
+    }
+  }
+
+  function renderControlSummaries() {
+    renderGPUSummary();
+    renderChartSummary();
+  }
+
+  function renderGPUSummary() {
+    const total = state.devices.size;
+    if (total === 0) {
+      dom.gpuSummary.textContent = "Waiting for GPUs";
+      return;
+    }
+    if (!state.explicitSelection || state.selectedIds.size === total) {
+      dom.gpuSummary.textContent = `All GPUs (${total})`;
+      return;
+    }
+    if (state.selectedIds.size === 0) {
+      dom.gpuSummary.textContent = "No GPUs selected";
+      return;
+    }
+
+    dom.gpuSummary.innerHTML = "";
+    const wrap = document.createElement("span");
+    wrap.className = "gpu-summary";
+    for (const device of selectedDevices()) {
+      const badge = document.createElement("span");
+      badge.className = "gpu-mini-badge";
+      badge.style.background = device.color;
+      badge.title = device.label;
+      badge.textContent = device.shortLabel;
+      wrap.appendChild(badge);
+    }
+    dom.gpuSummary.appendChild(wrap);
+  }
+
+  function renderChartSummary() {
+    const count = state.selectedChartIds.size;
+    if (count === metrics.length) {
+      dom.chartSummary.textContent = `All charts (${metrics.length})`;
+      return;
+    }
+    if (isDefaultChartSelection()) {
+      dom.chartSummary.textContent = "Default charts";
+      return;
+    }
+    if (count === 0) {
+      dom.chartSummary.textContent = "No charts selected";
+      return;
+    }
+    dom.chartSummary.textContent = `${count} chart${count === 1 ? "" : "s"}`;
   }
 
   function renderSummary() {
@@ -311,25 +466,55 @@
       if (!device) continue;
       const card = document.createElement("article");
       card.className = "summary-card";
+      card.tabIndex = 0;
       card.innerHTML = `
-        <p class="summary-title" title="${escapeHTML(deviceInfo.label)}">${escapeHTML(deviceInfo.label)}</p>
+        <p class="summary-title" title="${escapeHTML(deviceInfo.label)}">
+          <span class="gpu-badge" style="background:${deviceInfo.color}">${escapeHTML(deviceInfo.shortLabel)}</span>
+          <span class="device-name">${escapeHTML(deviceName(device))} - ${escapeHTML(device.uuid || "no UUID")}</span>
+        </p>
         <div class="summary-values">
-          <span>GPU ${formatMetric(chartMap.get("gpu-util"), device)}</span>
-          <span>MEM ${formatMetric(chartMap.get("mem-util"), device)}</span>
-          <span>Temp ${formatMetric(chartMap.get("temp"), device)}</span>
-          <span>Power ${formatMetric(chartMap.get("power"), device)}</span>
+          <span>MEM ${formatMetric(chartMap.get("memory"), device)}</span>
+          <span>GPU% ${formatMetric(chartMap.get("gpu-util"), device)}</span>
+          <span>MEM% ${formatMetric(chartMap.get("mem-util"), device)}</span>
+          <span>TEMP ${formatMetric(chartMap.get("temp"), device)}</span>
+          <span>POWER ${formatMetric(chartMap.get("power"), device)}</span>
+          <span>FAN ${formatMetric(chartMap.get("fan"), device)}</span>
         </div>
       `;
+      card.addEventListener("click", () => selectOnlyDevice(deviceInfo.id));
+      card.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          selectOnlyDevice(deviceInfo.id);
+        }
+      });
       dom.summary.appendChild(card);
     }
+  }
+
+  function selectOnlyDevice(id) {
+    if (state.explicitSelection && state.selectedIds.size === 1 && state.selectedIds.has(id)) {
+      state.explicitSelection = false;
+      state.selectedIds = new Set(state.devices.keys());
+      updateURL();
+      closeDropdowns();
+      renderAll();
+      return;
+    }
+
+    state.explicitSelection = true;
+    state.selectedIds = new Set([id]);
+    updateURL();
+    closeDropdowns();
+    renderAll();
   }
 
   function drawChart(chart) {
     const { canvas, metric } = chart;
     const rect = canvas.getBoundingClientRect();
     const ratio = window.devicePixelRatio || 1;
-    const width = Math.max(320, Math.floor(rect.width));
-    const height = Math.max(180, Math.floor(rect.height));
+    const width = Math.max(240, Math.floor(rect.width));
+    const height = Math.max(140, Math.floor(rect.height));
     if (canvas.width !== Math.floor(width * ratio) || canvas.height !== Math.floor(height * ratio)) {
       canvas.width = Math.floor(width * ratio);
       canvas.height = Math.floor(height * ratio);
@@ -339,7 +524,7 @@
     ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
     ctx.clearRect(0, 0, width, height);
 
-    const padding = { top: 18, right: 18, bottom: 34, left: 56 };
+    const padding = { top: 14, right: 14, bottom: 30, left: 52 };
     const plot = {
       x: padding.left,
       y: padding.top,
@@ -350,7 +535,7 @@
     drawBackground(ctx, plot, width, height);
     const visibleSamples = samplesInRange();
     if (visibleSamples.length === 0 || selectedDevices().length === 0) {
-      drawEmpty(ctx, plot, "Waiting for samples");
+      drawEmpty(ctx, plot, selectedDevices().length === 0 ? "No GPUs selected" : "Waiting for samples");
       return;
     }
 
@@ -388,7 +573,7 @@
     ctx.save();
     ctx.strokeStyle = "#e8eef5";
     ctx.fillStyle = "#68788d";
-    ctx.font = "12px Inter, system-ui, sans-serif";
+    ctx.font = "11px Inter, system-ui, sans-serif";
     ctx.lineWidth = 1;
 
     for (let i = 0; i <= 4; i += 1) {
@@ -400,7 +585,7 @@
 
       const value = yRange.max - ((yRange.max - yRange.min) * i) / 4;
       ctx.textAlign = "right";
-      ctx.fillText(`${formatNumber(value)}${unit ? ` ${unit}` : ""}`, plot.x - 8, y + 4);
+      ctx.fillText(`${formatNumber(value)}${unit ? ` ${unit}` : ""}`, plot.x - 7, y + 4);
     }
 
     for (let i = 0; i <= 4; i += 1) {
@@ -412,7 +597,7 @@
 
       const value = xRange.start + ((xRange.end - xRange.start) * i) / 4;
       ctx.textAlign = i === 0 ? "left" : i === 4 ? "right" : "center";
-      ctx.fillText(formatTime(value), x, plot.y + plot.h + 22);
+      ctx.fillText(formatTime(value), x, plot.y + plot.h + 20);
     }
     ctx.restore();
   }
@@ -496,45 +681,15 @@
     renderAll();
   }
 
-  function handleWheel(event, metricID) {
-    const chart = charts.get(metricID);
-    const rect = chart.canvas.getBoundingClientRect();
-    const plot = plotFor(chart.canvas);
-    const x = event.clientX - rect.left;
-    if (x < plot.x || x > plot.x + plot.w) return;
-    event.preventDefault();
-
-    const full = fullRange();
-    if (!full) return;
-    const current = currentRange();
-    const anchor = current.start + ((x - plot.x) / plot.w) * (current.end - current.start);
-    const factor = event.deltaY < 0 ? 0.82 : 1.22;
-    const minSpan = Math.max(10000, state.refreshInterval * 2);
-    let span = Math.max(minSpan, (current.end - current.start) * factor);
-    span = Math.min(span, full.end - full.start || minSpan);
-    let start = anchor - (anchor - current.start) * factor;
-    let end = start + span;
-    if (start < full.start) {
-      start = full.start;
-      end = start + span;
-    }
-    if (end > full.end) {
-      end = full.end;
-      start = end - span;
-    }
-    state.zoom = { start, end };
-    renderAll();
-  }
-
   function showTooltip(clientX, clientY, metric, sample) {
     const rows = selectedDevices()
       .map((deviceInfo) => {
         const device = sample.devices.get(deviceInfo.id);
-        const value = device ? formatMetric(metric, device) : "n/a";
+        const value = device ? formatTooltipMetric(metric, device) : "n/a";
         return `
           <div class="tooltip-row">
             <span class="tooltip-swatch" style="background:${deviceInfo.color}"></span>
-            <span class="tooltip-name">${escapeHTML(deviceInfo.label)}</span>
+            <span class="tooltip-name">${escapeHTML(deviceInfo.shortLabel)}</span>
             <span>${escapeHTML(value)}</span>
           </div>
         `;
@@ -553,16 +708,41 @@
     const allSelected = state.selectedIds.size === state.devices.size;
     if (!state.explicitSelection || allSelected) {
       next.delete("gpu");
+    } else if (state.selectedIds.size === 0) {
+      next.set("gpu", "none");
     } else {
-      next.set("gpu", [...state.selectedIds].join(","));
+      next.set("gpu", selectedDevices().map((device) => device.id).join(","));
     }
     if (state.focusedChart) {
-      next.set("chart", state.focusedChart);
+      next.set("chart", chartIDToParam(state.focusedChart));
     } else {
       next.delete("chart");
     }
-    const query = next.toString();
+    if (isDefaultChartSelection()) {
+      next.delete("charts");
+    } else if (selectedChartIds().length === 0) {
+      next.set("charts", "none");
+    } else if (selectedChartIds().length === metrics.length) {
+      next.set("charts", "all");
+    } else {
+      next.set("charts", selectedChartIds().map(chartIDToParam).join(","));
+    }
+    const query = next.toString().replaceAll("%2C", ",");
     window.history.replaceState(null, "", query ? `${window.location.pathname}?${query}` : window.location.pathname);
+  }
+
+  function resetToDefaults() {
+    state.explicitSelection = false;
+    state.selectedIds = new Set(state.devices.keys());
+    state.selectedChartIds = new Set(defaultChartIds);
+    state.focusedChart = null;
+    state.hoverTime = null;
+    tooltip.classList.remove("is-visible");
+    closeDropdowns();
+    window.history.replaceState(null, "", window.location.pathname);
+    renderChartSelector();
+    renderChartShells();
+    renderAll();
   }
 
   function samplesInRange() {
@@ -571,25 +751,8 @@
   }
 
   function currentRange() {
-    if (state.zoom) return state.zoom;
-    const full = fullRange();
-    if (!full) {
-      const now = Date.now();
-      return { start: now - 60000, end: now };
-    }
-    if (state.timeWindow === "all") return full;
-    const windowSize = Number(state.timeWindow);
-    return { start: Math.max(full.start, full.end - windowSize), end: full.end };
-  }
-
-  function fullRange() {
-    if (state.samples.length === 0) return null;
-    const first = state.samples[0].time;
-    const last = state.samples[state.samples.length - 1].time;
-    if (first === last) {
-      return { start: first - 30000, end: last + 30000 };
-    }
-    return { start: first, end: last };
+    const end = state.samples.length > 0 ? state.samples[state.samples.length - 1].time : Date.now();
+    return { start: end - state.timeWindow, end };
   }
 
   function yDomain(metric, samples) {
@@ -618,6 +781,23 @@
     return [...state.devices.values()].filter((device) => state.selectedIds.has(device.id));
   }
 
+  function resolveSelectedDeviceIds(available) {
+    const selected = new Set();
+    for (const id of state.selectedIds) {
+      if (available.has(id)) {
+        selected.add(id);
+        continue;
+      }
+      for (const device of state.devices.values()) {
+        if (device.aliases.includes(id)) {
+          selected.add(device.id);
+          break;
+        }
+      }
+    }
+    return selected;
+  }
+
   function nearestSample(samples, time) {
     if (samples.length === 0) return null;
     let nearest = samples[0];
@@ -634,7 +814,7 @@
 
   function plotFor(canvas) {
     const rect = canvas.getBoundingClientRect();
-    return { x: 56, y: 18, w: Math.max(1, rect.width - 74), h: Math.max(1, rect.height - 52) };
+    return { x: 52, y: 14, w: Math.max(1, rect.width - 66), h: Math.max(1, rect.height - 44) };
   }
 
   function xScale(value, range, plot) {
@@ -650,6 +830,11 @@
     const value = metric.value(device);
     if (value === null) return "n/a";
     return `${formatNumber(value)} ${metric.unit}`;
+  }
+
+  function formatTooltipMetric(metric, device) {
+    if (metric.tooltip) return metric.tooltip(device);
+    return formatMetric(metric, device);
   }
 
   function formatNumber(value) {
@@ -680,26 +865,132 @@
     return Number(value || 0) / 1024 / 1024 / 1024;
   }
 
+  function bytesToMiB(value) {
+    return Number(value || 0) / 1024 / 1024;
+  }
+
   function numberOrNull(value) {
     return typeof value === "number" && Number.isFinite(value) ? value : null;
   }
 
   function deviceId(device) {
-    if (device.uuid) return String(device.uuid);
     if (device.index !== undefined && device.index !== null) return String(device.index);
+    if (device.uuid) return String(device.uuid);
     return device.name || "unknown";
   }
 
+  function deviceAliases(device, id) {
+    const aliases = [];
+    if (device.uuid && String(device.uuid) !== id) {
+      aliases.push(String(device.uuid));
+    }
+    return aliases;
+  }
+
   function deviceLabel(device) {
-    const index = device.index !== undefined && device.index !== null ? `GPU ${device.index}` : "GPU";
-    const name = device.name || "Unknown device";
+    const index = shortDeviceLabel(device);
+    const name = deviceName(device);
     const uuid = device.uuid || "no UUID";
     return `${index} - ${name} - ${uuid}`;
   }
 
-  function setStatus(kind, text) {
-    dom.statusDot.className = `status-dot is-${kind}`;
-    dom.statusLabel.textContent = text;
+  function shortDeviceLabel(device) {
+    return device.index !== undefined && device.index !== null ? `GPU ${device.index}` : "GPU";
+  }
+
+  function deviceName(device) {
+    return device.name || "Unknown device";
+  }
+
+  function parseChartParam(value) {
+    if (value === null || value === "") return null;
+    if (value === "none") return [];
+    if (value === "all") return metrics.map((metric) => metric.id);
+    const parts = value.includes(",") ? value.split(",") : chartMap.has(value) ? [value] : value.split("");
+    const ids = parts.map(parseChartIDParam).filter(Boolean);
+    return [...new Set(ids)];
+  }
+
+  function parseChartIDParam(value) {
+    if (!value) return null;
+    if (chartMap.has(value)) return value;
+    const index = Number(value);
+    if (Number.isInteger(index) && index >= 1 && index <= metrics.length) {
+      return metrics[index - 1].id;
+    }
+    return null;
+  }
+
+  function chartIDToParam(id) {
+    return chartParamMap.get(id) || id;
+  }
+
+  function parseGPUParam(value) {
+    if (value === null || value === "" || value === "none") return [];
+    return value.split(",").filter(Boolean);
+  }
+
+  function selectedChartIds() {
+    return metrics.map((metric) => metric.id).filter((id) => state.selectedChartIds.has(id));
+  }
+
+  function isDefaultChartSelection() {
+    const selected = selectedChartIds();
+    return selected.length === defaultChartIds.length && selected.every((id, index) => id === defaultChartIds[index]);
+  }
+
+  function setTimeWindowMinutes(minutes) {
+    const nextMinutes = Math.max(1, Math.round(Number(minutes) || 1));
+    state.timeWindow = nextMinutes * 60000;
+    dom.timeMinutes.value = String(nextMinutes);
+    renderAll();
+  }
+
+  function applyTimeInput() {
+    setTimeWindowMinutes(dom.timeMinutes.value);
+  }
+
+  function toggleDropdown(dropdown) {
+    const isOpen = dropdown.classList.contains("is-open");
+    closeDropdowns();
+    if (!isOpen) {
+      openDropdown(dropdown);
+    }
+  }
+
+  function openDropdown(dropdown, closeOthers = true) {
+    if (closeOthers) closeDropdowns();
+    dropdown.classList.add("is-open");
+    const trigger = dropdown.querySelector(".dropdown-trigger");
+    if (trigger) trigger.setAttribute("aria-expanded", "true");
+  }
+
+  function focusTimeInput() {
+    openDropdown(dom.timeDropdown);
+    dom.timeMinutes.focus();
+    dom.timeMinutes.select();
+  }
+
+  function closeDropdowns() {
+    for (const dropdown of dom.dropdowns) {
+      dropdown.classList.remove("is-open");
+      const trigger = dropdown.querySelector(".dropdown-trigger");
+      if (trigger) trigger.setAttribute("aria-expanded", "false");
+    }
+  }
+
+  function updateStatus(kind, text) {
+    const statusKind = kind || (state.refreshInterval > 0 ? "ok" : "warn");
+    const statusText = text || statusLabelText();
+    dom.statusDot.className = `status-dot is-${statusKind}`;
+    dom.statusLabel.textContent = statusText;
+  }
+
+  function statusLabelText() {
+    if (state.refreshInterval <= 0) {
+      return state.lastUpdate ? `Paused, ${formatTime(state.lastUpdate)}` : "Paused";
+    }
+    return state.lastUpdate ? `Updated ${formatTime(state.lastUpdate)}` : "Starting";
   }
 
   function escapeHTML(value) {
@@ -709,6 +1000,6 @@
       ">": "&gt;",
       '"': "&quot;",
       "'": "&#39;",
-    }[char]));
+    })[char]);
   }
 })();

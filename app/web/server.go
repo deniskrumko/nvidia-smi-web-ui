@@ -10,6 +10,9 @@ import (
 	"github.com/deniskrumko/nvidia-smi-web-ui/pkg/webui"
 )
 
+// SnapshotProvider provides point-in-time GPU snapshots for the web server.
+type SnapshotProvider = webui.SnapshotProvider
+
 const (
 	defaultAddr     = ":8080"
 	shutdownTimeout = 5 * time.Second

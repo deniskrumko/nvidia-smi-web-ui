@@ -9,11 +9,15 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
+ARG NVIDIA_SMI_WEB_UI_VERSION="local"
+RUN printf '%s\n' "${NVIDIA_SMI_WEB_UI_VERSION}" > .version
 RUN CGO_ENABLED=1 GOOS=linux go build -o /out/nvidia-smi-web-ui .
 
 FROM ${RUNTIME_IMAGE}
 
+WORKDIR /app
 COPY --from=build /out/nvidia-smi-web-ui /usr/local/bin/nvidia-smi-web-ui
+COPY --from=build /src/.version .version
 
 ENTRYPOINT ["nvidia-smi-web-ui"]
 CMD ["help"]

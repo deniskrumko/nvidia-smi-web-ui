@@ -52,6 +52,12 @@ Run the local web UI:
 go run main.go web
 ```
 
+Run the local web UI with synthetic GPU data and without initializing NVML:
+
+```bash
+make debug
+```
+
 The web UI serves a stateless API at `/api/gpus` and keeps chart history only in the memory of the open browser tab. Refreshing or closing the tab clears the collected chart data.
 
 Optional web UI branding:
@@ -74,6 +80,7 @@ Unsupported metrics do not fail the whole command. They are recorded as warnings
 ```bash
 make run
 make web
+make debug
 make fmt
 make lint
 make tests

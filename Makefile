@@ -1,4 +1,4 @@
-.PHONY: list web tidy download-dependencies build fmt lint tests coverage check test-integration docker-build docker-run install-tools
+.PHONY: list web debug tidy download-dependencies build fmt lint tests coverage check test-integration docker-build docker-run install-tools
 
 APP_NAME ?= nvidia-smi-web-ui
 IMAGE ?= $(APP_NAME):latest
@@ -9,6 +9,9 @@ list:
 
 web:
 	go run main.go web
+
+debug:
+	NVIDIA_SMI_WEB_UI_DEBUG=1 go run main.go web
 
 tidy:
 	go mod tidy

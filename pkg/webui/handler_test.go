@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -36,6 +37,51 @@ func TestNewHandlerRendersIndexWithBranding(t *testing.T) {
 	if !strings.Contains(body, "Lab GPU Monitor") {
 		t.Fatalf("expected configured branding, got %q", body)
 	}
+	if !strings.Contains(body, "deniskrumko/nvidia-smi-web-ui local") {
+		t.Fatalf("expected local version, got %q", body)
+	}
+	for _, unexpected := range []string{"Live GPU monitoring", "History is stored only in this browser tab"} {
+		if strings.Contains(body, unexpected) {
+			t.Fatalf("expected index not to contain %q, got %q", unexpected, body)
+		}
+	}
+	for _, expected := range []string{"/static/logo_s.png", "data-gpu-trigger", "data-chart-trigger", "data-time-minutes", "data-refresh-interval"} {
+		if !strings.Contains(body, expected) {
+			t.Fatalf("expected index to contain %q, got %q", expected, body)
+		}
+	}
+	for _, expected := range []string{"/favicon/favicon-96x96.png", "/favicon/favicon.svg", "/favicon/favicon.ico", "/favicon/apple-touch-icon.png", "/favicon/site.webmanifest"} {
+		if !strings.Contains(body, expected) {
+			t.Fatalf("expected index to contain favicon markup %q, got %q", expected, body)
+		}
+	}
+}
+
+func TestNewHandlerRendersConfiguredVersion(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	response := httptest.NewRecorder()
+
+	webui.NewHandler(webui.Config{Version: "v1.0.0"}).ServeHTTP(response, request)
+
+	if body := response.Body.String(); !strings.Contains(body, "deniskrumko/nvidia-smi-web-ui v1.0.0") {
+		t.Fatalf("expected configured version, got %q", body)
+	}
+}
+
+func TestNewHandlerReadsVersionFile(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Chdir(tempDir)
+	if err := os.WriteFile(".version", []byte("v1.2.3\n"), 0o600); err != nil {
+		t.Fatalf("write version file: %v", err)
+	}
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	response := httptest.NewRecorder()
+
+	webui.NewHandler(webui.Config{}).ServeHTTP(response, request)
+
+	if body := response.Body.String(); !strings.Contains(body, "deniskrumko/nvidia-smi-web-ui v1.2.3") {
+		t.Fatalf("expected file version, got %q", body)
+	}
 }
 
 func TestNewHandlerUsesDefaultBranding(t *testing.T) {
@@ -55,8 +101,8 @@ func TestNewHandlerServesStaticAssets(t *testing.T) {
 		path     string
 		contains string
 	}{
-		{name: "css", path: "/static/app.css", contains: ".app-shell"},
-		{name: "js", path: "/static/app.js", contains: "/api/gpus"},
+		{name: "css", path: "/static/app.css", contains: ".topbar"},
+		{name: "js", path: "/static/app.js", contains: "refreshInterval: 1000"},
 	}
 
 	for _, test := range tests {
@@ -73,6 +119,72 @@ func TestNewHandlerServesStaticAssets(t *testing.T) {
 				t.Fatalf("expected static response to contain %q, got %q", test.contains, body)
 			}
 		})
+	}
+}
+
+func TestNewHandlerServesLogoAsset(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "/static/logo_s.png", nil)
+	response := httptest.NewRecorder()
+
+	webui.NewHandler(webui.Config{}).ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, response.Code)
+	}
+	if contentType := response.Header().Get("Content-Type"); contentType != "image/png" {
+		t.Fatalf("expected PNG content type, got %q", contentType)
+	}
+	if response.Body.Len() == 0 {
+		t.Fatal("expected logo response body")
+	}
+}
+
+func TestNewHandlerServesRootFaviconAssets(t *testing.T) {
+	tests := []struct {
+		name        string
+		path        string
+		contentType string
+	}{
+		{name: "svg", path: "/favicon/favicon.svg", contentType: "image/svg+xml"},
+		{name: "png", path: "/favicon/favicon-96x96.png", contentType: "image/png"},
+		{name: "ico", path: "/favicon/favicon.ico", contentType: "image/x-icon"},
+		{name: "apple touch icon", path: "/favicon/apple-touch-icon.png", contentType: "image/png"},
+		{name: "manifest icon 192", path: "/favicon/web-app-manifest-192x192.png", contentType: "image/png"},
+		{name: "manifest icon 512", path: "/favicon/web-app-manifest-512x512.png", contentType: "image/png"},
+		{name: "manifest", path: "/favicon/site.webmanifest", contentType: "application/manifest+json"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodGet, test.path, nil)
+			response := httptest.NewRecorder()
+
+			webui.NewHandler(webui.Config{}).ServeHTTP(response, request)
+
+			if response.Code != http.StatusOK {
+				t.Fatalf("expected status %d, got %d", http.StatusOK, response.Code)
+			}
+			if contentType := response.Header().Get("Content-Type"); contentType != test.contentType {
+				t.Fatalf("expected content type %q, got %q", test.contentType, contentType)
+			}
+			if response.Body.Len() == 0 {
+				t.Fatal("expected favicon response body")
+			}
+		})
+	}
+}
+
+func TestStaticAssetsDoNotContainRemovedChartZoomControls(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "/static/app.js", nil)
+	response := httptest.NewRecorder()
+
+	webui.NewHandler(webui.Config{}).ServeHTTP(response, request)
+
+	body := response.Body.String()
+	for _, unexpected := range []string{"Reset zoom", "handleWheel", "data-reset-zoom", "Refreshing..."} {
+		if strings.Contains(body, unexpected) {
+			t.Fatalf("expected app.js not to contain %q", unexpected)
+		}
 	}
 }
 
