@@ -1,9 +1,9 @@
 {{define "content"}}
 <main class="app-shell" data-branding="{{.Branding}}">
   <header class="topbar">
-    <div class="brand">
+    <a class="brand" href="/" data-brand-reset aria-label="Reset dashboard filters">
       <h1>{{.Branding}}</h1>
-    </div>
+    </a>
 
     <div class="dropdown gpu-selector" data-dropdown="gpu">
       <button class="dropdown-trigger gpu-trigger" type="button" data-gpu-trigger aria-expanded="false">
@@ -25,6 +25,10 @@
         <span data-chart-summary>Default charts</span>
       </button>
       <div class="dropdown-panel chart-panel" data-chart-panel>
+        <div class="dropdown-actions">
+          <button type="button" data-chart-select-all>Select all</button>
+          <button type="button" data-chart-clear-all>Clear all</button>
+        </div>
         <div class="chart-list" data-chart-list></div>
       </div>
     </div>
@@ -48,11 +52,13 @@
       <span class="status-dot" data-status-dot></span>
       <span class="last-update" data-status-label>Starting</span>
       <select data-refresh-interval aria-label="Refresh interval">
-        <option value="0">Off</option>
-        <option value="1000" selected>1 sec</option>
-        <option value="5000">5 sec</option>
-        <option value="60000">1 min</option>
-        <option value="300000">5 min</option>
+        <optgroup label="Auto-refresh">
+          <option value="0">Off</option>
+          <option value="1000" selected>1 sec</option>
+          <option value="5000">5 sec</option>
+          <option value="60000">1 min</option>
+          <option value="300000">5 min</option>
+        </optgroup>
       </select>
       <button class="primary-action" type="button" data-refresh-now>Refresh now</button>
     </div>
@@ -60,5 +66,8 @@
 
   <section class="summary" data-summary aria-label="Current GPU values"></section>
   <section class="charts-grid" data-charts aria-label="GPU metric charts"></section>
+  <footer class="app-footer">
+    <a href="https://github.com/deniskrumko/nvidia-smi-web-ui" target="_blank" rel="noreferrer">deniskrumko/nvidia-smi-web-ui {{.Version}}</a>
+  </footer>
 </main>
 {{end}}

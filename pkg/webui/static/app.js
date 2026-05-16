@@ -2,8 +2,7 @@
   const metrics = [
     {
       id: "memory",
-      title: "Memory",
-      subtitle: "Used GPU memory",
+      title: "Memory usage",
       unit: "GiB",
       domain: "auto",
       value(device) {
@@ -15,13 +14,12 @@
       },
       detail(device) {
         if (!device.memory) return "n/a";
-        return `${bytesToGiB(device.memory.used_bytes).toFixed(2)} / ${bytesToGiB(device.memory.total_bytes).toFixed(2)} GiB`;
+        return `${bytesToGiB(device.memory.used_bytes).toFixed(2)}/${bytesToGiB(device.memory.total_bytes).toFixed(2)} GiB`;
       },
     },
     {
       id: "gpu-util",
-      title: "GPU Util",
-      subtitle: "SM activity",
+      title: "GPU utilization (%)",
       unit: "%",
       domain: [0, 100],
       value(device) {
@@ -30,8 +28,7 @@
     },
     {
       id: "mem-util",
-      title: "MEM Util",
-      subtitle: "Memory controller activity",
+      title: "Memory utilization (%)",
       unit: "%",
       domain: [0, 100],
       value(device) {
@@ -41,7 +38,6 @@
     {
       id: "temp",
       title: "Temperature",
-      subtitle: "GPU core temperature",
       unit: "C",
       domain: "auto",
       value(device) {
@@ -50,8 +46,7 @@
     },
     {
       id: "power",
-      title: "Power",
-      subtitle: "Current board draw",
+      title: "Power usage",
       unit: "W",
       domain: "auto",
       value(device) {
@@ -61,8 +56,7 @@
     },
     {
       id: "fan",
-      title: "Fan",
-      subtitle: "Fan speed",
+      title: "Fan speed",
       unit: "%",
       domain: [0, 100],
       value(device) {
@@ -74,8 +68,10 @@
   const defaultChartIds = ["memory", "gpu-util", "mem-util", "temp"];
   const colors = ["#1f6fdb", "#dc5f00", "#179a63", "#8b5cf6", "#c2415d", "#0f8b8d", "#6d7d00", "#9b4d96"];
   const chartMap = new Map(metrics.map((metric) => [metric.id, metric]));
+  const chartParamMap = new Map(metrics.map((metric, index) => [metric.id, String(index + 1)]));
 
   const dom = {
+    brandReset: document.querySelector("[data-brand-reset]"),
     dropdowns: [...document.querySelectorAll("[data-dropdown]")],
     gpuDropdown: document.querySelector('[data-dropdown="gpu"]'),
     chartDropdown: document.querySelector('[data-dropdown="charts"]'),
@@ -91,6 +87,8 @@
     deviceList: document.querySelector("[data-device-list]"),
     selectAll: document.querySelector("[data-select-all]"),
     clearAll: document.querySelector("[data-clear-all]"),
+    chartSelectAll: document.querySelector("[data-chart-select-all]"),
+    chartClearAll: document.querySelector("[data-chart-clear-all]"),
     refreshInterval: document.querySelector("[data-refresh-interval]"),
     refreshNow: document.querySelector("[data-refresh-now]"),
     timeInputLabel: document.querySelector(".time-input-label"),
@@ -102,13 +100,14 @@
   const params = new URLSearchParams(window.location.search);
   const initialGPUParam = params.get("gpu");
   const initialChartIds = parseChartParam(params.get("charts"));
+  const initialFocusedChart = parseChartIDParam(params.get("chart"));
   const state = {
     samples: [],
     devices: new Map(),
-    selectedIds: new Set(initialGPUParam ? initialGPUParam.split(",").filter(Boolean) : []),
+    selectedIds: new Set(parseGPUParam(initialGPUParam)),
     selectedChartIds: new Set(initialChartIds === null ? defaultChartIds : initialChartIds),
     explicitSelection: Boolean(initialGPUParam),
-    focusedChart: chartMap.has(params.get("chart")) ? params.get("chart") : null,
+    focusedChart: initialFocusedChart,
     hoverTime: null,
     refreshInterval: 1000,
     timeWindow: 300000,
@@ -139,6 +138,11 @@
   });
 
   function bindControls() {
+    dom.brandReset.addEventListener("click", (event) => {
+      event.preventDefault();
+      resetToDefaults();
+    });
+
     dom.gpuTrigger.addEventListener("click", () => toggleDropdown(dom.gpuDropdown));
     dom.chartTrigger.addEventListener("click", () => toggleDropdown(dom.chartDropdown));
     dom.timeInputLabel.addEventListener("click", () => focusTimeInput());
@@ -174,6 +178,23 @@
       state.explicitSelection = true;
       state.selectedIds = new Set();
       updateURL();
+      renderAll();
+    });
+
+    dom.chartSelectAll.addEventListener("click", () => {
+      state.selectedChartIds = new Set(metrics.map((metric) => metric.id));
+      updateURL();
+      renderChartSelector();
+      renderChartShells();
+      renderAll();
+    });
+
+    dom.chartClearAll.addEventListener("click", () => {
+      state.selectedChartIds = new Set();
+      state.focusedChart = null;
+      updateURL();
+      renderChartSelector();
+      renderChartShells();
       renderAll();
     });
 
@@ -217,7 +238,6 @@
       header.innerHTML = `
         <div class="chart-title">
           <h2>${escapeHTML(metric.title)}</h2>
-          <p>${escapeHTML(metric.subtitle)}</p>
         </div>
         <div class="chart-actions">
           <button type="button" data-toggle-fullscreen>${state.focusedChart === metric.id ? "Close" : "Fullscreen"}</button>
@@ -283,6 +303,7 @@
           label: deviceLabel(device),
           shortLabel: shortDeviceLabel(device),
           color: colors[state.devices.size % colors.length],
+          aliases: deviceAliases(device, id),
         });
       }
     }
@@ -291,7 +312,7 @@
       state.selectedIds = new Set(state.devices.keys());
     } else {
       const available = new Set(state.devices.keys());
-      state.selectedIds = new Set([...state.selectedIds].filter((id) => available.has(id)));
+      state.selectedIds = resolveSelectedDeviceIds(available);
     }
 
     state.samples.push({ time: Number.isFinite(collectedAt) ? collectedAt : Date.now(), devices: normalized });
@@ -417,8 +438,16 @@
 
   function renderChartSummary() {
     const count = state.selectedChartIds.size;
+    if (count === metrics.length) {
+      dom.chartSummary.textContent = `All charts (${metrics.length})`;
+      return;
+    }
     if (isDefaultChartSelection()) {
       dom.chartSummary.textContent = "Default charts";
+      return;
+    }
+    if (count === 0) {
+      dom.chartSummary.textContent = "No charts selected";
       return;
     }
     dom.chartSummary.textContent = `${count} chart${count === 1 ? "" : "s"}`;
@@ -445,8 +474,8 @@
         </p>
         <div class="summary-values">
           <span>MEM ${formatMetric(chartMap.get("memory"), device)}</span>
-          <span>GPU % ${formatMetric(chartMap.get("gpu-util"), device)}</span>
-          <span>MEM % ${formatMetric(chartMap.get("mem-util"), device)}</span>
+          <span>GPU% ${formatMetric(chartMap.get("gpu-util"), device)}</span>
+          <span>MEM% ${formatMetric(chartMap.get("mem-util"), device)}</span>
           <span>TEMP ${formatMetric(chartMap.get("temp"), device)}</span>
           <span>POWER ${formatMetric(chartMap.get("power"), device)}</span>
           <span>FAN ${formatMetric(chartMap.get("fan"), device)}</span>
@@ -679,11 +708,13 @@
     const allSelected = state.selectedIds.size === state.devices.size;
     if (!state.explicitSelection || allSelected) {
       next.delete("gpu");
+    } else if (state.selectedIds.size === 0) {
+      next.set("gpu", "none");
     } else {
-      next.set("gpu", [...state.selectedIds].join(","));
+      next.set("gpu", selectedDevices().map((device) => device.id).join(","));
     }
     if (state.focusedChart) {
-      next.set("chart", state.focusedChart);
+      next.set("chart", chartIDToParam(state.focusedChart));
     } else {
       next.delete("chart");
     }
@@ -691,11 +722,27 @@
       next.delete("charts");
     } else if (selectedChartIds().length === 0) {
       next.set("charts", "none");
+    } else if (selectedChartIds().length === metrics.length) {
+      next.set("charts", "all");
     } else {
-      next.set("charts", selectedChartIds().join(","));
+      next.set("charts", selectedChartIds().map(chartIDToParam).join(","));
     }
-    const query = next.toString();
+    const query = next.toString().replaceAll("%2C", ",");
     window.history.replaceState(null, "", query ? `${window.location.pathname}?${query}` : window.location.pathname);
+  }
+
+  function resetToDefaults() {
+    state.explicitSelection = false;
+    state.selectedIds = new Set(state.devices.keys());
+    state.selectedChartIds = new Set(defaultChartIds);
+    state.focusedChart = null;
+    state.hoverTime = null;
+    tooltip.classList.remove("is-visible");
+    closeDropdowns();
+    window.history.replaceState(null, "", window.location.pathname);
+    renderChartSelector();
+    renderChartShells();
+    renderAll();
   }
 
   function samplesInRange() {
@@ -732,6 +779,23 @@
 
   function selectedDevices() {
     return [...state.devices.values()].filter((device) => state.selectedIds.has(device.id));
+  }
+
+  function resolveSelectedDeviceIds(available) {
+    const selected = new Set();
+    for (const id of state.selectedIds) {
+      if (available.has(id)) {
+        selected.add(id);
+        continue;
+      }
+      for (const device of state.devices.values()) {
+        if (device.aliases.includes(id)) {
+          selected.add(device.id);
+          break;
+        }
+      }
+    }
+    return selected;
   }
 
   function nearestSample(samples, time) {
@@ -810,9 +874,17 @@
   }
 
   function deviceId(device) {
-    if (device.uuid) return String(device.uuid);
     if (device.index !== undefined && device.index !== null) return String(device.index);
+    if (device.uuid) return String(device.uuid);
     return device.name || "unknown";
+  }
+
+  function deviceAliases(device, id) {
+    const aliases = [];
+    if (device.uuid && String(device.uuid) !== id) {
+      aliases.push(String(device.uuid));
+    }
+    return aliases;
   }
 
   function deviceLabel(device) {
@@ -833,8 +905,29 @@
   function parseChartParam(value) {
     if (value === null || value === "") return null;
     if (value === "none") return [];
-    const ids = value.split(",").filter((id) => chartMap.has(id));
+    if (value === "all") return metrics.map((metric) => metric.id);
+    const parts = value.includes(",") ? value.split(",") : chartMap.has(value) ? [value] : value.split("");
+    const ids = parts.map(parseChartIDParam).filter(Boolean);
     return [...new Set(ids)];
+  }
+
+  function parseChartIDParam(value) {
+    if (!value) return null;
+    if (chartMap.has(value)) return value;
+    const index = Number(value);
+    if (Number.isInteger(index) && index >= 1 && index <= metrics.length) {
+      return metrics[index - 1].id;
+    }
+    return null;
+  }
+
+  function chartIDToParam(id) {
+    return chartParamMap.get(id) || id;
+  }
+
+  function parseGPUParam(value) {
+    if (value === null || value === "" || value === "none") return [];
+    return value.split(",").filter(Boolean);
   }
 
   function selectedChartIds() {

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -36,6 +37,9 @@ func TestNewHandlerRendersIndexWithBranding(t *testing.T) {
 	if !strings.Contains(body, "Lab GPU Monitor") {
 		t.Fatalf("expected configured branding, got %q", body)
 	}
+	if !strings.Contains(body, "deniskrumko/nvidia-smi-web-ui local") {
+		t.Fatalf("expected local version, got %q", body)
+	}
 	for _, unexpected := range []string{"Live GPU monitoring", "History is stored only in this browser tab"} {
 		if strings.Contains(body, unexpected) {
 			t.Fatalf("expected index not to contain %q, got %q", unexpected, body)
@@ -45,6 +49,33 @@ func TestNewHandlerRendersIndexWithBranding(t *testing.T) {
 		if !strings.Contains(body, expected) {
 			t.Fatalf("expected index to contain %q, got %q", expected, body)
 		}
+	}
+}
+
+func TestNewHandlerRendersConfiguredVersion(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	response := httptest.NewRecorder()
+
+	webui.NewHandler(webui.Config{Version: "v1.0.0"}).ServeHTTP(response, request)
+
+	if body := response.Body.String(); !strings.Contains(body, "deniskrumko/nvidia-smi-web-ui v1.0.0") {
+		t.Fatalf("expected configured version, got %q", body)
+	}
+}
+
+func TestNewHandlerReadsVersionFile(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Chdir(tempDir)
+	if err := os.WriteFile(".version", []byte("v1.2.3\n"), 0o600); err != nil {
+		t.Fatalf("write version file: %v", err)
+	}
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	response := httptest.NewRecorder()
+
+	webui.NewHandler(webui.Config{}).ServeHTTP(response, request)
+
+	if body := response.Body.String(); !strings.Contains(body, "deniskrumko/nvidia-smi-web-ui v1.2.3") {
+		t.Fatalf("expected file version, got %q", body)
 	}
 }
 
