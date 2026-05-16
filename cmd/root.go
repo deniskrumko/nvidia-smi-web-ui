@@ -6,6 +6,7 @@ import (
 	inspectcmd "github.com/deniskrumko/nvidia-smi-web-ui/cmd/inspect"
 	listcmd "github.com/deniskrumko/nvidia-smi-web-ui/cmd/list"
 	processescmd "github.com/deniskrumko/nvidia-smi-web-ui/cmd/processes"
+	webcmd "github.com/deniskrumko/nvidia-smi-web-ui/cmd/web"
 	"github.com/spf13/cobra"
 )
 
@@ -21,6 +22,6 @@ func Execute(ctx context.Context) error {
 		},
 	}
 	root.CompletionOptions.HiddenDefaultCmd = true
-	root.AddCommand(listcmd.New(), inspectcmd.New(), processescmd.New())
+	root.AddCommand(listcmd.New(), inspectcmd.New(), processescmd.New(), webcmd.New())
 	return root.ExecuteContext(ctx)
 }

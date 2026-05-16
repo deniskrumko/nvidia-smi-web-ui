@@ -28,7 +28,7 @@ make docker-run
 `make tests` runs:
 
 ```bash
-go run gotest.tools/gotestsum@latest -- ./...
+go test ./...
 ```
 
 Optional GPU integration test:

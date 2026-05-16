@@ -46,6 +46,12 @@ List GPU processes:
 go run main.go processes
 ```
 
+Run the local web UI skeleton:
+
+```bash
+go run main.go web
+```
+
 Useful flags:
 
 - `--json`: render machine-readable JSON.
@@ -58,6 +64,7 @@ Unsupported metrics do not fail the whole command. They are recorded as warnings
 
 ```bash
 make run
+make run-web
 make fmt
 make lint
 make tests
@@ -65,7 +72,7 @@ make docker-build
 make docker-run
 ```
 
-`make tests` uses `gotest.tools/gotestsum@latest` as requested.
+`make tests` runs the standard Go test suite with `go test ./...`.
 
 ## Docker
 
@@ -103,9 +110,11 @@ docker build -f Dockerfile.cuda -t nvidia-smi-web-ui:cuda .
 - `main.go`: thin entrypoint with signal-aware context.
 - `cmd/...`: Cobra command wiring.
 - `app/gpu`: use-case layer for CLI and future API transports.
+- `app/web`: HTTP server lifecycle for the local web UI.
 - `pkg/nvmlclient`: NVML lifecycle, hardware adapter, snapshot collection, warnings.
 - `pkg/gpuinfo`: exported DTOs intended for future HTTP responses.
 - `pkg/output`: JSON and table rendering.
+- `pkg/webui`: server-rendered HTML handlers, templates, and static assets.
 
 The NVML client initializes NVML once per command and shuts it down at the same ownership level. Fatal errors are limited to initialization, device count, and device handle lookup. Optional per-metric failures become structured warnings.
 
