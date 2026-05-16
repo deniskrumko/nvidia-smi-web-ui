@@ -69,17 +69,25 @@
 
   const colors = ["#1f6fdb", "#dc5f00", "#179a63", "#8b5cf6", "#c2415d", "#0f8b8d", "#6d7d00", "#9b4d96"];
   const chartMap = new Map(metrics.map((metric) => [metric.id, metric]));
-  const root = document.querySelector(".app-shell");
 
   const dom = {
+    dropdowns: [...document.querySelectorAll("[data-dropdown]")],
+    gpuDropdown: document.querySelector('[data-dropdown="gpu"]'),
+    timeDropdown: document.querySelector('[data-dropdown="time"]'),
+    gpuTrigger: document.querySelector("[data-gpu-trigger]"),
+    gpuSummary: document.querySelector("[data-gpu-summary]"),
+    timeTrigger: document.querySelector("[data-time-trigger]"),
+    timeSummary: document.querySelector("[data-time-summary]"),
     statusDot: document.querySelector("[data-status-dot]"),
     statusLabel: document.querySelector("[data-status-label]"),
     deviceList: document.querySelector("[data-device-list]"),
     selectAll: document.querySelector("[data-select-all]"),
-    refreshEnabled: document.querySelector("[data-refresh-enabled]"),
+    clearAll: document.querySelector("[data-clear-all]"),
     refreshInterval: document.querySelector("[data-refresh-interval]"),
-    timeWindow: document.querySelector("[data-time-window]"),
     refreshNow: document.querySelector("[data-refresh-now]"),
+    timePresets: [...document.querySelectorAll("[data-time-preset]")],
+    customMinutes: document.querySelector("[data-custom-minutes]"),
+    applyCustomWindow: document.querySelector("[data-apply-custom-window]"),
     summary: document.querySelector("[data-summary]"),
     charts: document.querySelector("[data-charts]"),
   };
@@ -93,12 +101,12 @@
     explicitSelection: Boolean(initialGPUParam),
     focusedChart: chartMap.has(params.get("chart")) ? params.get("chart") : null,
     hoverTime: null,
-    refreshEnabled: true,
-    refreshInterval: 5000,
-    timeWindow: "all",
-    zoom: null,
+    refreshInterval: 1000,
+    timeWindow: 300000,
+    timeWindowLabel: "Last 5 min",
     timer: 0,
     fetching: false,
+    lastUpdate: null,
   };
 
   const charts = new Map();
@@ -108,6 +116,7 @@
 
   renderChartShells();
   bindControls();
+  renderControlSummaries();
   fetchSnapshot();
   scheduleRefresh();
   window.addEventListener("resize", renderAll);
@@ -118,6 +127,20 @@
   });
 
   function bindControls() {
+    dom.gpuTrigger.addEventListener("click", () => toggleDropdown(dom.gpuDropdown));
+    dom.timeTrigger.addEventListener("click", () => toggleDropdown(dom.timeDropdown));
+
+    document.addEventListener("click", (event) => {
+      if (dom.dropdowns.some((dropdown) => dropdown.contains(event.target))) return;
+      closeDropdowns();
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        closeDropdowns();
+      }
+    });
+
     dom.selectAll.addEventListener("click", () => {
       state.explicitSelection = false;
       state.selectedIds = new Set(state.devices.keys());
@@ -125,20 +148,35 @@
       renderAll();
     });
 
-    dom.refreshEnabled.addEventListener("change", () => {
-      state.refreshEnabled = dom.refreshEnabled.value === "on";
-      scheduleRefresh();
-      setStatus(state.refreshEnabled ? "ok" : "warn", state.refreshEnabled ? "Auto refresh on" : "Auto refresh paused");
+    dom.clearAll.addEventListener("click", () => {
+      state.explicitSelection = true;
+      state.selectedIds = new Set();
+      updateURL();
+      renderAll();
     });
 
     dom.refreshInterval.addEventListener("change", () => {
       state.refreshInterval = Number(dom.refreshInterval.value);
       scheduleRefresh();
+      updateStatus();
     });
 
-    dom.timeWindow.addEventListener("change", () => {
-      state.timeWindow = dom.timeWindow.value;
-      state.zoom = null;
+    dom.timePresets.forEach((button) => {
+      button.addEventListener("click", () => {
+        state.timeWindow = Number(button.dataset.timePreset);
+        state.timeWindowLabel = button.textContent.trim();
+        dom.customMinutes.value = String(Math.max(1, Math.round(state.timeWindow / 60000)));
+        closeDropdowns();
+        renderAll();
+      });
+    });
+
+    dom.applyCustomWindow.addEventListener("click", () => {
+      const minutes = Math.max(1, Math.round(Number(dom.customMinutes.value) || 1));
+      state.timeWindow = minutes * 60000;
+      state.timeWindowLabel = `Last ${minutes} min`;
+      dom.customMinutes.value = String(minutes);
+      closeDropdowns();
       renderAll();
     });
 
@@ -147,6 +185,7 @@
 
   function renderChartShells() {
     dom.charts.innerHTML = "";
+    charts.clear();
     for (const metric of metrics) {
       const card = document.createElement("article");
       card.className = "chart-card";
@@ -161,7 +200,6 @@
           <p>${escapeHTML(metric.subtitle)}</p>
         </div>
         <div class="chart-actions">
-          <button type="button" data-reset-zoom>Reset zoom</button>
           <button type="button" data-toggle-fullscreen>${state.focusedChart === metric.id ? "Close" : "Fullscreen"}</button>
         </div>
       `;
@@ -175,10 +213,6 @@
 
       charts.set(metric.id, { metric, card, canvas, wrap });
 
-      header.querySelector("[data-reset-zoom]").addEventListener("click", () => {
-        state.zoom = null;
-        renderAll();
-      });
       header.querySelector("[data-toggle-fullscreen]").addEventListener("click", () => {
         state.focusedChart = state.focusedChart === metric.id ? null : metric.id;
         updateURL();
@@ -191,14 +225,13 @@
         tooltip.classList.remove("is-visible");
         renderAll();
       });
-      canvas.addEventListener("wheel", (event) => handleWheel(event, metric.id), { passive: false });
     }
   }
 
   async function fetchSnapshot() {
     if (state.fetching) return;
     state.fetching = true;
-    setStatus("warn", "Refreshing...");
+    updateStatus("warn", "Refreshing...");
     try {
       const response = await fetch("/api/gpus", { headers: { Accept: "application/json" } });
       const payload = await response.json();
@@ -206,9 +239,10 @@
         throw new Error(payload.error || `Request failed with status ${response.status}`);
       }
       addSample(payload);
-      setStatus("ok", `Updated ${formatTime(Date.now())}`);
+      state.lastUpdate = Date.now();
+      updateStatus();
     } catch (error) {
-      setStatus("error", error.message);
+      updateStatus("error", error.message);
     } finally {
       state.fetching = false;
       scheduleRefresh();
@@ -226,7 +260,9 @@
       if (!state.devices.has(id)) {
         state.devices.set(id, {
           id,
+          index: device.index,
           label: deviceLabel(device),
+          shortLabel: shortDeviceLabel(device),
           color: colors[state.devices.size % colors.length],
         });
       }
@@ -237,10 +273,6 @@
     } else {
       const available = new Set(state.devices.keys());
       state.selectedIds = new Set([...state.selectedIds].filter((id) => available.has(id)));
-      if (state.selectedIds.size === 0 && state.devices.size > 0) {
-        state.explicitSelection = false;
-        state.selectedIds = new Set(state.devices.keys());
-      }
     }
 
     state.samples.push({ time: Number.isFinite(collectedAt) ? collectedAt : Date.now(), devices: normalized });
@@ -249,12 +281,13 @@
 
   function scheduleRefresh() {
     window.clearTimeout(state.timer);
-    if (!state.refreshEnabled) return;
+    if (state.refreshInterval <= 0) return;
     state.timer = window.setTimeout(fetchSnapshot, state.refreshInterval);
   }
 
   function renderAll() {
     renderDevices();
+    renderControlSummaries();
     renderSummary();
     for (const chart of charts.values()) {
       drawChart(chart);
@@ -270,7 +303,7 @@
     dom.deviceList.innerHTML = "";
     for (const device of state.devices.values()) {
       const label = document.createElement("label");
-      label.className = "device-chip";
+      label.className = "device-option";
 
       const input = document.createElement("input");
       input.type = "checkbox";
@@ -282,20 +315,55 @@
         } else {
           state.selectedIds.delete(device.id);
         }
-        if (state.selectedIds.size === 0) {
-          state.selectedIds.add(device.id);
-          input.checked = true;
-        }
         updateURL();
         renderAll();
       });
 
+      const dot = document.createElement("span");
+      dot.className = "color-dot";
+      dot.style.background = device.color;
+
       const text = document.createElement("span");
       text.title = device.label;
       text.textContent = device.label;
-      label.append(input, text);
+
+      label.append(input, dot, text);
       dom.deviceList.appendChild(label);
     }
+  }
+
+  function renderControlSummaries() {
+    renderGPUSummary();
+    dom.timeSummary.textContent = state.timeWindowLabel;
+  }
+
+  function renderGPUSummary() {
+    const total = state.devices.size;
+    if (total === 0) {
+      dom.gpuSummary.textContent = "Waiting for GPUs";
+      return;
+    }
+    if (!state.explicitSelection || state.selectedIds.size === total) {
+      dom.gpuSummary.textContent = `All GPUs (${total})`;
+      return;
+    }
+    if (state.selectedIds.size === 0) {
+      dom.gpuSummary.textContent = "No GPUs selected";
+      return;
+    }
+
+    dom.gpuSummary.innerHTML = "";
+    const wrap = document.createElement("span");
+    wrap.className = "gpu-summary";
+    for (const device of selectedDevices()) {
+      const badge = document.createElement("span");
+      badge.className = "gpu-mini-badge";
+      badge.style.background = device.color;
+      badge.title = device.label;
+      badge.textContent = device.shortLabel;
+      wrap.appendChild(badge);
+    }
+    dom.gpuSummary.appendChild(wrap);
   }
 
   function renderSummary() {
@@ -312,12 +380,17 @@
       const card = document.createElement("article");
       card.className = "summary-card";
       card.innerHTML = `
-        <p class="summary-title" title="${escapeHTML(deviceInfo.label)}">${escapeHTML(deviceInfo.label)}</p>
+        <p class="summary-title" title="${escapeHTML(deviceInfo.label)}">
+          <span class="gpu-badge" style="background:${deviceInfo.color}">${escapeHTML(deviceInfo.shortLabel)}</span>
+          <span class="device-name">${escapeHTML(deviceName(device))}</span>
+        </p>
         <div class="summary-values">
           <span>GPU ${formatMetric(chartMap.get("gpu-util"), device)}</span>
-          <span>MEM ${formatMetric(chartMap.get("mem-util"), device)}</span>
+          <span>MEM util ${formatMetric(chartMap.get("mem-util"), device)}</span>
+          <span>Memory ${formatMetric(chartMap.get("memory"), device)}</span>
           <span>Temp ${formatMetric(chartMap.get("temp"), device)}</span>
           <span>Power ${formatMetric(chartMap.get("power"), device)}</span>
+          <span>Fan ${formatMetric(chartMap.get("fan"), device)}</span>
         </div>
       `;
       dom.summary.appendChild(card);
@@ -328,8 +401,8 @@
     const { canvas, metric } = chart;
     const rect = canvas.getBoundingClientRect();
     const ratio = window.devicePixelRatio || 1;
-    const width = Math.max(320, Math.floor(rect.width));
-    const height = Math.max(180, Math.floor(rect.height));
+    const width = Math.max(240, Math.floor(rect.width));
+    const height = Math.max(140, Math.floor(rect.height));
     if (canvas.width !== Math.floor(width * ratio) || canvas.height !== Math.floor(height * ratio)) {
       canvas.width = Math.floor(width * ratio);
       canvas.height = Math.floor(height * ratio);
@@ -339,7 +412,7 @@
     ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
     ctx.clearRect(0, 0, width, height);
 
-    const padding = { top: 18, right: 18, bottom: 34, left: 56 };
+    const padding = { top: 14, right: 14, bottom: 30, left: 52 };
     const plot = {
       x: padding.left,
       y: padding.top,
@@ -350,7 +423,7 @@
     drawBackground(ctx, plot, width, height);
     const visibleSamples = samplesInRange();
     if (visibleSamples.length === 0 || selectedDevices().length === 0) {
-      drawEmpty(ctx, plot, "Waiting for samples");
+      drawEmpty(ctx, plot, selectedDevices().length === 0 ? "No GPUs selected" : "Waiting for samples");
       return;
     }
 
@@ -388,7 +461,7 @@
     ctx.save();
     ctx.strokeStyle = "#e8eef5";
     ctx.fillStyle = "#68788d";
-    ctx.font = "12px Inter, system-ui, sans-serif";
+    ctx.font = "11px Inter, system-ui, sans-serif";
     ctx.lineWidth = 1;
 
     for (let i = 0; i <= 4; i += 1) {
@@ -400,7 +473,7 @@
 
       const value = yRange.max - ((yRange.max - yRange.min) * i) / 4;
       ctx.textAlign = "right";
-      ctx.fillText(`${formatNumber(value)}${unit ? ` ${unit}` : ""}`, plot.x - 8, y + 4);
+      ctx.fillText(`${formatNumber(value)}${unit ? ` ${unit}` : ""}`, plot.x - 7, y + 4);
     }
 
     for (let i = 0; i <= 4; i += 1) {
@@ -412,7 +485,7 @@
 
       const value = xRange.start + ((xRange.end - xRange.start) * i) / 4;
       ctx.textAlign = i === 0 ? "left" : i === 4 ? "right" : "center";
-      ctx.fillText(formatTime(value), x, plot.y + plot.h + 22);
+      ctx.fillText(formatTime(value), x, plot.y + plot.h + 20);
     }
     ctx.restore();
   }
@@ -496,36 +569,6 @@
     renderAll();
   }
 
-  function handleWheel(event, metricID) {
-    const chart = charts.get(metricID);
-    const rect = chart.canvas.getBoundingClientRect();
-    const plot = plotFor(chart.canvas);
-    const x = event.clientX - rect.left;
-    if (x < plot.x || x > plot.x + plot.w) return;
-    event.preventDefault();
-
-    const full = fullRange();
-    if (!full) return;
-    const current = currentRange();
-    const anchor = current.start + ((x - plot.x) / plot.w) * (current.end - current.start);
-    const factor = event.deltaY < 0 ? 0.82 : 1.22;
-    const minSpan = Math.max(10000, state.refreshInterval * 2);
-    let span = Math.max(minSpan, (current.end - current.start) * factor);
-    span = Math.min(span, full.end - full.start || minSpan);
-    let start = anchor - (anchor - current.start) * factor;
-    let end = start + span;
-    if (start < full.start) {
-      start = full.start;
-      end = start + span;
-    }
-    if (end > full.end) {
-      end = full.end;
-      start = end - span;
-    }
-    state.zoom = { start, end };
-    renderAll();
-  }
-
   function showTooltip(clientX, clientY, metric, sample) {
     const rows = selectedDevices()
       .map((deviceInfo) => {
@@ -571,25 +614,8 @@
   }
 
   function currentRange() {
-    if (state.zoom) return state.zoom;
-    const full = fullRange();
-    if (!full) {
-      const now = Date.now();
-      return { start: now - 60000, end: now };
-    }
-    if (state.timeWindow === "all") return full;
-    const windowSize = Number(state.timeWindow);
-    return { start: Math.max(full.start, full.end - windowSize), end: full.end };
-  }
-
-  function fullRange() {
-    if (state.samples.length === 0) return null;
-    const first = state.samples[0].time;
-    const last = state.samples[state.samples.length - 1].time;
-    if (first === last) {
-      return { start: first - 30000, end: last + 30000 };
-    }
-    return { start: first, end: last };
+    const end = state.samples.length > 0 ? state.samples[state.samples.length - 1].time : Date.now();
+    return { start: end - state.timeWindow, end };
   }
 
   function yDomain(metric, samples) {
@@ -634,7 +660,7 @@
 
   function plotFor(canvas) {
     const rect = canvas.getBoundingClientRect();
-    return { x: 56, y: 18, w: Math.max(1, rect.width - 74), h: Math.max(1, rect.height - 52) };
+    return { x: 52, y: 14, w: Math.max(1, rect.width - 66), h: Math.max(1, rect.height - 44) };
   }
 
   function xScale(value, range, plot) {
@@ -691,15 +717,50 @@
   }
 
   function deviceLabel(device) {
-    const index = device.index !== undefined && device.index !== null ? `GPU ${device.index}` : "GPU";
-    const name = device.name || "Unknown device";
+    const index = shortDeviceLabel(device);
+    const name = deviceName(device);
     const uuid = device.uuid || "no UUID";
     return `${index} - ${name} - ${uuid}`;
   }
 
-  function setStatus(kind, text) {
-    dom.statusDot.className = `status-dot is-${kind}`;
-    dom.statusLabel.textContent = text;
+  function shortDeviceLabel(device) {
+    return device.index !== undefined && device.index !== null ? `GPU ${device.index}` : "GPU";
+  }
+
+  function deviceName(device) {
+    return device.name || "Unknown device";
+  }
+
+  function toggleDropdown(dropdown) {
+    const isOpen = dropdown.classList.contains("is-open");
+    closeDropdowns();
+    if (!isOpen) {
+      dropdown.classList.add("is-open");
+      const trigger = dropdown.querySelector(".dropdown-trigger");
+      if (trigger) trigger.setAttribute("aria-expanded", "true");
+    }
+  }
+
+  function closeDropdowns() {
+    for (const dropdown of dom.dropdowns) {
+      dropdown.classList.remove("is-open");
+      const trigger = dropdown.querySelector(".dropdown-trigger");
+      if (trigger) trigger.setAttribute("aria-expanded", "false");
+    }
+  }
+
+  function updateStatus(kind, text) {
+    const statusKind = kind || (state.refreshInterval > 0 ? "ok" : "warn");
+    const statusText = text || statusLabelText();
+    dom.statusDot.className = `status-dot is-${statusKind}`;
+    dom.statusLabel.textContent = statusText;
+  }
+
+  function statusLabelText() {
+    if (state.refreshInterval <= 0) {
+      return state.lastUpdate ? `Paused, ${formatTime(state.lastUpdate)}` : "Paused";
+    }
+    return state.lastUpdate ? `Updated ${formatTime(state.lastUpdate)}` : "Starting";
   }
 
   function escapeHTML(value) {
@@ -709,6 +770,6 @@
       ">": "&gt;",
       '"': "&quot;",
       "'": "&#39;",
-    }[char]));
+    })[char]);
   }
 })();

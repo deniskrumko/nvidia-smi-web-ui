@@ -1,61 +1,56 @@
 {{define "content"}}
 <main class="app-shell" data-branding="{{.Branding}}">
   <header class="topbar">
-    <div>
-      <p class="eyebrow">Live GPU monitoring</p>
+    <div class="brand">
       <h1>{{.Branding}}</h1>
     </div>
-    <div class="status-strip" aria-live="polite">
+
+    <div class="dropdown gpu-selector" data-dropdown="gpu">
+      <button class="dropdown-trigger gpu-trigger" type="button" data-gpu-trigger aria-expanded="false">
+        <span data-gpu-summary>Waiting for GPUs</span>
+      </button>
+      <div class="dropdown-panel gpu-panel" data-gpu-panel>
+        <div class="dropdown-actions">
+          <button type="button" data-select-all>Select all</button>
+          <button type="button" data-clear-all>Clear all</button>
+        </div>
+        <div class="device-list" data-device-list>
+          <span class="muted">Waiting for devices...</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="topbar-spacer"></div>
+
+    <div class="dropdown time-selector" data-dropdown="time">
+      <button class="dropdown-trigger" type="button" data-time-trigger aria-expanded="false">
+        <span data-time-summary>Last 5 min</span>
+      </button>
+      <div class="dropdown-panel time-panel" data-time-panel>
+        <button type="button" data-time-preset="300000">Last 5 min</button>
+        <button type="button" data-time-preset="900000">Last 15 min</button>
+        <button type="button" data-time-preset="3600000">Last 60 min</button>
+        <label class="custom-window">
+          <span>Custom minutes</span>
+          <input type="number" min="1" step="1" value="5" data-custom-minutes>
+        </label>
+        <button type="button" data-apply-custom-window>Apply</button>
+      </div>
+    </div>
+
+    <div class="refresh-section" aria-live="polite">
       <span class="status-dot" data-status-dot></span>
-      <span data-status-label>Starting</span>
+      <span class="last-update" data-status-label>Starting</span>
+      <select data-refresh-interval aria-label="Refresh interval">
+        <option value="0">Off</option>
+        <option value="1000" selected>1 sec</option>
+        <option value="5000">5 sec</option>
+        <option value="60000">1 min</option>
+        <option value="300000">5 min</option>
+      </select>
+      <button class="primary-action" type="button" data-refresh-now>Refresh now</button>
     </div>
   </header>
-
-  <section class="notice" role="note">
-    History is stored only in this browser tab. Refreshing, closing, or restarting the tab clears the collected chart data.
-  </section>
-
-  <section class="controls" aria-label="Dashboard controls">
-    <div class="control-group device-control">
-      <div class="control-heading">
-        <span>GPU devices</span>
-        <button type="button" data-select-all>All</button>
-      </div>
-      <div class="device-list" data-device-list>
-        <span class="muted">Waiting for devices...</span>
-      </div>
-    </div>
-
-    <label class="control-group">
-      <span>Auto refresh</span>
-      <select data-refresh-enabled>
-        <option value="on" selected>On</option>
-        <option value="off">Paused</option>
-      </select>
-    </label>
-
-    <label class="control-group">
-      <span>Every</span>
-      <select data-refresh-interval>
-        <option value="2000">2 sec</option>
-        <option value="5000" selected>5 sec</option>
-        <option value="10000">10 sec</option>
-        <option value="30000">30 sec</option>
-      </select>
-    </label>
-
-    <label class="control-group">
-      <span>Time window</span>
-      <select data-time-window>
-        <option value="all" selected>All history</option>
-        <option value="300000">Last 5 min</option>
-        <option value="900000">Last 15 min</option>
-        <option value="3600000">Last hour</option>
-      </select>
-    </label>
-
-    <button class="primary-action" type="button" data-refresh-now>Refresh now</button>
-  </section>
 
   <section class="summary" data-summary aria-label="Current GPU values"></section>
   <section class="charts-grid" data-charts aria-label="GPU metric charts"></section>

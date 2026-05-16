@@ -36,6 +36,16 @@ func TestNewHandlerRendersIndexWithBranding(t *testing.T) {
 	if !strings.Contains(body, "Lab GPU Monitor") {
 		t.Fatalf("expected configured branding, got %q", body)
 	}
+	for _, unexpected := range []string{"Live GPU monitoring", "History is stored only in this browser tab"} {
+		if strings.Contains(body, unexpected) {
+			t.Fatalf("expected index not to contain %q, got %q", unexpected, body)
+		}
+	}
+	for _, expected := range []string{"data-gpu-trigger", "data-time-trigger", "data-refresh-interval"} {
+		if !strings.Contains(body, expected) {
+			t.Fatalf("expected index to contain %q, got %q", expected, body)
+		}
+	}
 }
 
 func TestNewHandlerUsesDefaultBranding(t *testing.T) {
@@ -55,8 +65,8 @@ func TestNewHandlerServesStaticAssets(t *testing.T) {
 		path     string
 		contains string
 	}{
-		{name: "css", path: "/static/app.css", contains: ".app-shell"},
-		{name: "js", path: "/static/app.js", contains: "/api/gpus"},
+		{name: "css", path: "/static/app.css", contains: ".topbar"},
+		{name: "js", path: "/static/app.js", contains: "refreshInterval: 1000"},
 	}
 
 	for _, test := range tests {
@@ -73,6 +83,20 @@ func TestNewHandlerServesStaticAssets(t *testing.T) {
 				t.Fatalf("expected static response to contain %q, got %q", test.contains, body)
 			}
 		})
+	}
+}
+
+func TestStaticAssetsDoNotContainRemovedChartZoomControls(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "/static/app.js", nil)
+	response := httptest.NewRecorder()
+
+	webui.NewHandler(webui.Config{}).ServeHTTP(response, request)
+
+	body := response.Body.String()
+	for _, unexpected := range []string{"Reset zoom", "handleWheel", "data-reset-zoom"} {
+		if strings.Contains(body, unexpected) {
+			t.Fatalf("expected app.js not to contain %q", unexpected)
+		}
 	}
 }
 
