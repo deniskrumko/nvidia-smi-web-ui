@@ -82,12 +82,20 @@ docker run --rm --gpus all nvidia-smi-web-ui:latest list
 docker run --rm --gpus all nvidia-smi-web-ui:latest list --json
 ```
 
-The runtime image defaults to `nvidia/cuda:13.0.1-base-ubuntu24.04` and can be overridden:
+The default runtime image is `debian:bookworm-slim`. A CUDA-based image is not required for NVML-only reads: `libnvidia-ml.so.1` is provided by the NVIDIA driver on the host and mounted into the container by NVIDIA Container Toolkit when the container is started with `--gpus all`.
+
+The runtime image can be overridden:
 
 ```bash
 docker build \
-  --build-arg CUDA_RUNTIME_IMAGE=nvidia/cuda:13.2.1-base-ubuntu24.04 \
+  --build-arg RUNTIME_IMAGE=debian:bookworm-slim \
   -t nvidia-smi-web-ui:latest .
+```
+
+The previous CUDA runtime variant is kept as `Dockerfile.cuda` for reference:
+
+```bash
+docker build -f Dockerfile.cuda -t nvidia-smi-web-ui:cuda .
 ```
 
 ## Architecture

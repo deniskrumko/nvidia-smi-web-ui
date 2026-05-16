@@ -35,7 +35,7 @@ jobs:
             linux/amd64
             linux/arm64
           build-args: |
-            CUDA_RUNTIME_IMAGE=nvidia/cuda:13.0.1-base-ubuntu24.04
+            RUNTIME_IMAGE=debian:bookworm-slim
           tags: |
             deniskrumko/nvidia-smi-web-ui:latest
             deniskrumko/nvidia-smi-web-ui:${{ github.ref_name }}
