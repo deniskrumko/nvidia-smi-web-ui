@@ -20,21 +20,27 @@
       </div>
     </div>
 
+    <div class="dropdown chart-selector" data-dropdown="charts">
+      <button class="dropdown-trigger chart-trigger" type="button" data-chart-trigger aria-expanded="false">
+        <span data-chart-summary>Default charts</span>
+      </button>
+      <div class="dropdown-panel chart-panel" data-chart-panel>
+        <div class="chart-list" data-chart-list></div>
+      </div>
+    </div>
+
     <div class="topbar-spacer"></div>
 
     <div class="dropdown time-selector" data-dropdown="time">
-      <button class="dropdown-trigger" type="button" data-time-trigger aria-expanded="false">
-        <span data-time-summary>Last 5 min</span>
-      </button>
+      <label class="time-input-label">
+        <span>Time window:</span>
+        <input type="number" min="1" step="1" value="5" data-time-minutes aria-label="Time window in minutes">
+        <span>min</span>
+      </label>
       <div class="dropdown-panel time-panel" data-time-panel>
-        <button type="button" data-time-preset="300000">Last 5 min</button>
-        <button type="button" data-time-preset="900000">Last 15 min</button>
-        <button type="button" data-time-preset="3600000">Last 60 min</button>
-        <label class="custom-window">
-          <span>Custom minutes</span>
-          <input type="number" min="1" step="1" value="5" data-custom-minutes>
-        </label>
-        <button type="button" data-apply-custom-window>Apply</button>
+        <button type="button" data-time-preset="5">5 min</button>
+        <button type="button" data-time-preset="15">15 min</button>
+        <button type="button" data-time-preset="60">1 hour</button>
       </div>
     </div>
 

@@ -41,7 +41,7 @@ func TestNewHandlerRendersIndexWithBranding(t *testing.T) {
 			t.Fatalf("expected index not to contain %q, got %q", unexpected, body)
 		}
 	}
-	for _, expected := range []string{"data-gpu-trigger", "data-time-trigger", "data-refresh-interval"} {
+	for _, expected := range []string{"data-gpu-trigger", "data-chart-trigger", "data-time-minutes", "data-refresh-interval"} {
 		if !strings.Contains(body, expected) {
 			t.Fatalf("expected index to contain %q, got %q", expected, body)
 		}
@@ -93,7 +93,7 @@ func TestStaticAssetsDoNotContainRemovedChartZoomControls(t *testing.T) {
 	webui.NewHandler(webui.Config{}).ServeHTTP(response, request)
 
 	body := response.Body.String()
-	for _, unexpected := range []string{"Reset zoom", "handleWheel", "data-reset-zoom"} {
+	for _, unexpected := range []string{"Reset zoom", "handleWheel", "data-reset-zoom", "Refreshing..."} {
 		if strings.Contains(body, unexpected) {
 			t.Fatalf("expected app.js not to contain %q", unexpected)
 		}
