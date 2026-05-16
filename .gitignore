@@ -32,3 +32,6 @@ go.work.sum
 # .idea/
 # .vscode/
 .swp
+
+# macOS
+.DS_Store

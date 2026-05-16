@@ -56,8 +56,18 @@ button {
   align-items: center;
   color: inherit;
   display: flex;
+  gap: 10px;
   min-width: 190px;
   text-decoration: none;
+}
+
+.brand-logo {
+  display: block;
+  flex: 0 0 auto;
+  height: 34px;
+  object-fit: contain;
+  width: 40px;
+  margin-left: 2px;
 }
 
 .brand:focus-visible {

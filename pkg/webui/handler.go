@@ -13,7 +13,7 @@ import (
 	"github.com/deniskrumko/nvidia-smi-web-ui/pkg/gpuinfo"
 )
 
-//go:embed static/*.css static/*.js templates/*.html
+//go:embed static/* static/favicon/* templates/*.html
 var assetFS embed.FS
 
 const defaultPageTitle = "Nvidia SMI Web UI"
@@ -48,10 +48,32 @@ func NewHandler(config Config) http.Handler {
 	}
 
 	mux := http.NewServeMux()
+	for _, asset := range rootStaticAssets {
+		asset := asset
+		mux.HandleFunc("GET "+asset.path, func(response http.ResponseWriter, request *http.Request) {
+			serveRootStaticAsset(response, request, asset)
+		})
+	}
 	mux.Handle("GET /static/", http.FileServer(http.FS(assetFS)))
 	mux.HandleFunc("GET /api/gpus", renderer.gpus)
 	mux.HandleFunc("GET /", renderer.index)
 	return mux
+}
+
+type rootStaticAsset struct {
+	path        string
+	file        string
+	contentType string
+}
+
+var rootStaticAssets = []rootStaticAsset{
+	{path: "/favicon/favicon.svg", file: "static/favicon/favicon.svg", contentType: "image/svg+xml"},
+	{path: "/favicon/favicon-96x96.png", file: "static/favicon/favicon-96x96.png", contentType: "image/png"},
+	{path: "/favicon/favicon.ico", file: "static/favicon/favicon.ico", contentType: "image/x-icon"},
+	{path: "/favicon/apple-touch-icon.png", file: "static/favicon/apple-touch-icon.png", contentType: "image/png"},
+	{path: "/favicon/web-app-manifest-192x192.png", file: "static/favicon/web-app-manifest-192x192.png", contentType: "image/png"},
+	{path: "/favicon/web-app-manifest-512x512.png", file: "static/favicon/web-app-manifest-512x512.png", contentType: "image/png"},
+	{path: "/favicon/site.webmanifest", file: "static/favicon/site.webmanifest", contentType: "application/manifest+json"},
 }
 
 type renderer struct {
@@ -94,6 +116,11 @@ func (renderer *renderer) index(response http.ResponseWriter, request *http.Requ
 	if err := renderer.templates.ExecuteTemplate(response, "layout.html", data); err != nil {
 		http.Error(response, err.Error(), http.StatusInternalServerError)
 	}
+}
+
+func serveRootStaticAsset(response http.ResponseWriter, request *http.Request, asset rootStaticAsset) {
+	response.Header().Set("Content-Type", asset.contentType)
+	http.ServeFileFS(response, request, assetFS, asset.file)
 }
 
 func (renderer *renderer) gpus(response http.ResponseWriter, request *http.Request) {
