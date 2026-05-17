@@ -8,14 +8,13 @@ Web dashboard for monitoring NVIDIA GPUs through NVML. Like `nvidia-smi` but coo
 
 <img width="1309" height="743" alt="preview" src="https://github.com/user-attachments/assets/b7aa17e0-271f-4576-a169-de02b1ce41b1" />
 
-
 `nvidia-smi-web-ui` runs as a local web application and shows live GPU utilization, memory usage, temperature, power, clocks, PCI details, ECC data, and other metrics exposed by NVIDIA Management Library. The browser keeps chart history in memory, so refreshing or closing the tab starts a fresh monitoring session.
 
 Unsupported optional NVML metrics do not stop the application. They are reported as warnings because metric availability can depend on GPU generation, driver version, MIG mode, permissions, and platform.
 
 ## Docker
 
-Pull the published image:
+Pull the docker image (only `90.2MB`):
 
 ```bash
 docker pull deniskrumko/nvidia-smi-web-ui:latest
@@ -30,26 +29,18 @@ docker run --rm \
   deniskrumko/nvidia-smi-web-ui:latest
 ```
 
-Open the dashboard at http://localhost:8080.
+Open the dashboard at http://localhost:8080
 
-Run with custom page branding:
+### Docker run examples
+
+Run with custom page branding in the top-left corner of UI:
 
 ```bash
 docker run --rm \
   --gpus all \
   -p 8080:8080 \
-  -e WEB_PAGE_BRANDING="Server GPU Monitor" \
+  -e WEB_PAGE_BRANDING="My GPU Monitor" \
   -e WEB_PAGE_TITLE="GPU Dashboard" \
-  deniskrumko/nvidia-smi-web-ui:latest
-```
-
-Run without NVML by using synthetic GPU data:
-
-```bash
-docker run --rm \
-  -p 8080:8080 \
-  -e NVIDIA_SMI_WEB_UI_DEBUG=1 \
-  -e DEBUG_GPU_COUNT=4 \
   deniskrumko/nvidia-smi-web-ui:latest
 ```
 
@@ -60,14 +51,6 @@ docker run --rm \
   --gpus '"device=0,1"' \
   -p 8080:8080 \
   deniskrumko/nvidia-smi-web-ui:latest
-```
-
-Build the image locally:
-
-```bash
-docker build \
-  --build-arg NVIDIA_SMI_WEB_UI_VERSION=local \
-  -t deniskrumko/nvidia-smi-web-ui:latest .
 ```
 
 ## Configuration
@@ -108,7 +91,13 @@ GET /api/gpus
 
 The endpoint is stateless. Each request reads a fresh NVML snapshot and returns JSON DTOs used by the dashboard.
 
-## Architecture
+## About this project
+
+The project is written in Go. The backend uses the standard `net/http` server, Cobra for command wiring, and `github.com/NVIDIA/go-nvml` for NVML access. The web UI is server-rendered HTML plus static CSS and vanilla JavaScript.
+
+There is no Node.js build step, package manager, bundler, or third-party JavaScript dependency tree. The Docker image only ships the Go binary, HTML templates, and static assets from this repository.
+
+### Project structure
 
 - `main.go`: signal-aware application entrypoint.
 - `cmd/web`: web command wiring and environment-based configuration.
