@@ -71,6 +71,7 @@
   const chartParamMap = new Map(metrics.map((metric, index) => [metric.id, String(index + 1)]));
 
   const dom = {
+    appShell: document.querySelector("[data-branding]"),
     brandReset: document.querySelector("[data-brand-reset]"),
     dropdowns: [...document.querySelectorAll("[data-dropdown]")],
     gpuDropdown: document.querySelector('[data-dropdown="gpu"]'),
@@ -219,7 +220,11 @@
   function renderChartShells() {
     dom.charts.innerHTML = "";
     charts.clear();
-    const selectedMetrics = metrics.filter((metric) => state.selectedChartIds.has(metric.id));
+    dom.appShell.classList.toggle("is-chart-focused", Boolean(state.focusedChart));
+    const selectedMetrics = metrics.filter((metric) => {
+      if (!state.selectedChartIds.has(metric.id)) return false;
+      return !state.focusedChart || state.focusedChart === metric.id;
+    });
     dom.charts.style.setProperty("--chart-rows", String(Math.max(1, Math.ceil(selectedMetrics.length / 2))));
     dom.charts.dataset.count = String(selectedMetrics.length);
     if (selectedMetrics.length === 0) {

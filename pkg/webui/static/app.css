@@ -1,4 +1,7 @@
 :root {
+  --ui-border-color: #d9e1eb;
+  --ui-border: 1px solid var(--ui-border-color);
+  --topbar-control-height: 49px;
   color-scheme: light;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   background: #f5f7fa;
@@ -37,10 +40,14 @@ button {
   padding: 10px;
 }
 
+.app-shell.is-chart-focused {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
 .topbar {
   align-items: center;
   background: #ffffff;
-  border: 1px solid #d9e1eb;
+  border: var(--ui-border);
   border-radius: 8px;
   box-shadow: 0 8px 22px rgba(21, 32, 51, 0.08);
   display: flex;
@@ -105,7 +112,7 @@ h1 {
 .dropdown-trigger {
   align-items: center;
   background: #f9fbfd;
-  border: 1px solid #cfd9e6;
+  border: var(--ui-border);
   color: #1f2f46;
   display: inline-flex;
   gap: 8px;
@@ -133,7 +140,7 @@ h1 {
 
 .dropdown-panel {
   background: #ffffff;
-  border: 1px solid #cfd9e6;
+  border: var(--ui-border);
   border-radius: 8px;
   box-shadow: 0 18px 44px rgba(21, 32, 51, 0.16);
   display: none;
@@ -181,7 +188,7 @@ h1 {
 .dropdown-actions button,
 .dropdown-panel button {
   background: #eef3f8;
-  border: 1px solid #d5deea;
+  border: var(--ui-border);
   color: #25364f;
   padding: 6px 10px;
 }
@@ -278,12 +285,12 @@ h1 {
 .time-input-label {
   align-items: center;
   background: #f9fbfd;
-  border: 1px solid #cfd9e6;
+  border: var(--ui-border);
   border-radius: 8px;
   cursor: text;
   display: flex;
   gap: 5px;
-  min-height: 42px;
+  min-height: var(--topbar-control-height);
   padding: 5px 10px;
   transition: background-color 120ms ease, border-color 120ms ease;
 }
@@ -291,7 +298,7 @@ h1 {
 .time-input-label:hover,
 .time-input-label:focus-within {
   background: #eef5ff;
-  border-color: #b8c8da;
+  border-color: var(--ui-border-color);
 }
 
 .time-input-label span {
@@ -311,7 +318,7 @@ h1 {
   padding: 0;
   text-align: right;
   width: 24px;
-  border-bottom: 1px solid #cfd9e6;
+  border-bottom: 1px solid var(--ui-border-color);
   text-align: center;
 }
 
@@ -327,7 +334,7 @@ h1 {
 
 select {
   background: #f9fbfd;
-  border: 1px solid #cfd9e6;
+  border: var(--ui-border);
   border-radius: 7px;
   color: #152033;
   min-height: 36px;
@@ -338,11 +345,11 @@ select {
 .refresh-section {
   align-items: center;
   background: #f9fbfd;
-  border: 1px solid #dce4ef;
+  border: var(--ui-border);
   border-radius: 8px;
   display: flex;
   gap: 8px;
-  min-height: 42px;
+  min-height: var(--topbar-control-height);
   padding: 5px;
 }
 
@@ -370,7 +377,7 @@ select {
 .last-update {
   color: #405169;
   font-size: 0.84rem;
-  min-width: 112px;
+  min-width: 120px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -399,9 +406,13 @@ select {
   min-height: 0;
 }
 
+.app-shell.is-chart-focused .summary {
+  display: none;
+}
+
 .summary-card {
   background: #ffffff;
-  border: 1px solid #dce4ef;
+  border: var(--ui-border);
   border-radius: 8px;
   box-shadow: 0 8px 20px rgba(21, 32, 51, 0.05);
   cursor: pointer;
@@ -412,7 +423,7 @@ select {
 
 .summary-card:hover,
 .summary-card:focus-visible {
-  border-color: #9aaabd;
+  border-color: var(--ui-border-color);
   outline: none;
 }
 
@@ -482,7 +493,7 @@ select {
 .empty-charts {
   align-items: center;
   background: #ffffff;
-  border: 1px solid #dae3ee;
+  border: var(--ui-border);
   border-radius: 8px;
   color: #6d7d91;
   display: flex;
@@ -492,7 +503,7 @@ select {
 
 .chart-card {
   background: #ffffff;
-  border: 1px solid #dae3ee;
+  border: var(--ui-border);
   border-radius: 8px;
   box-shadow: 0 10px 24px rgba(21, 32, 51, 0.06);
   display: grid;
@@ -502,19 +513,9 @@ select {
   overflow: hidden;
 }
 
-.chart-card.is-fullscreen {
-  border-radius: 0;
-  bottom: 0;
-  left: 0;
-  position: fixed;
-  right: 0;
-  top: 0;
-  z-index: 50;
-}
-
 .chart-header {
   align-items: center;
-  border-bottom: 1px solid #edf1f6;
+  border-bottom: 1px solid var(--ui-border-color);
   display: flex;
   gap: 10px;
   justify-content: space-between;
@@ -547,7 +548,7 @@ select {
 
 .chart-actions button {
   background: #eef3f8;
-  border: 1px solid #d5deea;
+  border: var(--ui-border);
   border-radius: 7px;
   color: #25364f;
   font-size: 0.78rem;
@@ -574,7 +575,7 @@ canvas {
 
 .tooltip {
   background: rgba(255, 255, 255, 0.98);
-  border: 1px solid #cfd9e6;
+  border: var(--ui-border);
   border-radius: 8px;
   box-shadow: 0 14px 36px rgba(21, 32, 51, 0.14);
   color: #152033;
@@ -649,6 +650,7 @@ canvas {
   .dropdown,
   .dropdown-trigger,
   .refresh-section {
+    max-width: none;
     width: 100%;
   }
 
@@ -663,6 +665,10 @@ canvas {
 
   .refresh-section {
     flex-wrap: wrap;
+  }
+
+  .primary-action {
+    width: 100%;
   }
 
   .last-update {
