@@ -4,7 +4,10 @@
 [![GitHub Release](https://img.shields.io/github/v/release/deniskrumko/nvidia-smi-web-ui)](https://github.com/deniskrumko/nvidia-smi-web-ui/releases)
 [![Docker pulls](https://img.shields.io/docker/pulls/deniskrumko/nvidia-smi-web-ui)](https://hub.docker.com/r/deniskrumko/nvidia-smi-web-ui/tags)
 
-Web dashboard for monitoring NVIDIA GPUs through NVML.
+Web dashboard for monitoring NVIDIA GPUs through NVML. Like `nvidia-smi` but cooler 🤙
+
+<img width="1309" height="743" alt="preview" src="https://github.com/user-attachments/assets/b7aa17e0-271f-4576-a169-de02b1ce41b1" />
+
 
 `nvidia-smi-web-ui` runs as a local web application and shows live GPU utilization, memory usage, temperature, power, clocks, PCI details, ECC data, and other metrics exposed by NVIDIA Management Library. The browser keeps chart history in memory, so refreshing or closing the tab starts a fresh monitoring session.
 
