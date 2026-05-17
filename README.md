@@ -58,6 +58,8 @@ Run the local web UI with synthetic GPU data and without initializing NVML:
 make debug
 ```
 
+By default, debug mode serves 8 synthetic GPUs. Override it with `DEBUG_GPU_COUNT=4 make debug`.
+
 The web UI serves a stateless API at `/api/gpus` and keeps chart history only in the memory of the open browser tab. Refreshing or closing the tab clears the collected chart data.
 
 Optional web UI branding:

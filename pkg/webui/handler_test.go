@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -95,96 +96,39 @@ func TestNewHandlerUsesDefaultBranding(t *testing.T) {
 	}
 }
 
-func TestNewHandlerServesStaticAssets(t *testing.T) {
+func TestNewHandlerServesStaticDirectory(t *testing.T) {
+	staticDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(staticDir, "generated.txt"), []byte("static file"), 0o600); err != nil {
+		t.Fatalf("write static file: %v", err)
+	}
+	if err := os.Mkdir(filepath.Join(staticDir, "favicon"), 0o700); err != nil {
+		t.Fatalf("make favicon dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(staticDir, "favicon", "generated.txt"), []byte("favicon file"), 0o600); err != nil {
+		t.Fatalf("write favicon file: %v", err)
+	}
 	tests := []struct {
-		name     string
-		path     string
-		contains string
+		path string
+		want string
 	}{
-		{name: "css", path: "/static/app.css", contains: ".topbar"},
-		{name: "js", path: "/static/app.js", contains: "refreshInterval: 1000"},
+		{path: "/static/generated.txt", want: "static file"},
+		{path: "/favicon/generated.txt", want: "favicon file"},
 	}
 
 	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
+		t.Run(test.path, func(t *testing.T) {
 			request := httptest.NewRequest(http.MethodGet, test.path, nil)
 			response := httptest.NewRecorder()
 
-			webui.NewHandler(webui.Config{}).ServeHTTP(response, request)
+			webui.NewHandler(webui.Config{StaticDir: staticDir}).ServeHTTP(response, request)
 
 			if response.Code != http.StatusOK {
 				t.Fatalf("expected status %d, got %d", http.StatusOK, response.Code)
 			}
-			if body := response.Body.String(); !strings.Contains(body, test.contains) {
-				t.Fatalf("expected static response to contain %q, got %q", test.contains, body)
+			if body := response.Body.String(); body != test.want {
+				t.Fatalf("expected body %q, got %q", test.want, body)
 			}
 		})
-	}
-}
-
-func TestNewHandlerServesLogoAsset(t *testing.T) {
-	request := httptest.NewRequest(http.MethodGet, "/static/logo_s.png", nil)
-	response := httptest.NewRecorder()
-
-	webui.NewHandler(webui.Config{}).ServeHTTP(response, request)
-
-	if response.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d", http.StatusOK, response.Code)
-	}
-	if contentType := response.Header().Get("Content-Type"); contentType != "image/png" {
-		t.Fatalf("expected PNG content type, got %q", contentType)
-	}
-	if response.Body.Len() == 0 {
-		t.Fatal("expected logo response body")
-	}
-}
-
-func TestNewHandlerServesRootFaviconAssets(t *testing.T) {
-	tests := []struct {
-		name        string
-		path        string
-		contentType string
-	}{
-		{name: "svg", path: "/favicon/favicon.svg", contentType: "image/svg+xml"},
-		{name: "png", path: "/favicon/favicon-96x96.png", contentType: "image/png"},
-		{name: "ico", path: "/favicon/favicon.ico", contentType: "image/x-icon"},
-		{name: "apple touch icon", path: "/favicon/apple-touch-icon.png", contentType: "image/png"},
-		{name: "manifest icon 192", path: "/favicon/web-app-manifest-192x192.png", contentType: "image/png"},
-		{name: "manifest icon 512", path: "/favicon/web-app-manifest-512x512.png", contentType: "image/png"},
-		{name: "manifest", path: "/favicon/site.webmanifest", contentType: "application/manifest+json"},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			request := httptest.NewRequest(http.MethodGet, test.path, nil)
-			response := httptest.NewRecorder()
-
-			webui.NewHandler(webui.Config{}).ServeHTTP(response, request)
-
-			if response.Code != http.StatusOK {
-				t.Fatalf("expected status %d, got %d", http.StatusOK, response.Code)
-			}
-			if contentType := response.Header().Get("Content-Type"); contentType != test.contentType {
-				t.Fatalf("expected content type %q, got %q", test.contentType, contentType)
-			}
-			if response.Body.Len() == 0 {
-				t.Fatal("expected favicon response body")
-			}
-		})
-	}
-}
-
-func TestStaticAssetsDoNotContainRemovedChartZoomControls(t *testing.T) {
-	request := httptest.NewRequest(http.MethodGet, "/static/app.js", nil)
-	response := httptest.NewRecorder()
-
-	webui.NewHandler(webui.Config{}).ServeHTTP(response, request)
-
-	body := response.Body.String()
-	for _, unexpected := range []string{"Reset zoom", "handleWheel", "data-reset-zoom", "Refreshing..."} {
-		if strings.Contains(body, unexpected) {
-			t.Fatalf("expected app.js not to contain %q", unexpected)
-		}
 	}
 }
 

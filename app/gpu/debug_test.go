@@ -9,7 +9,7 @@ import (
 func TestDebugProviderReturnsSyntheticSnapshotWithoutProcesses(t *testing.T) {
 	provider := newDebugProvider(func() time.Time {
 		return time.Date(2026, 5, 16, 10, 0, 0, 0, time.UTC)
-	})
+	}, 2)
 
 	snapshot, err := provider.List(context.Background(), false)
 	if err != nil {
@@ -40,7 +40,7 @@ func TestDebugProviderReturnsSyntheticSnapshotWithoutProcesses(t *testing.T) {
 func TestDebugProviderIncludesProcessesWhenRequested(t *testing.T) {
 	provider := newDebugProvider(func() time.Time {
 		return time.Date(2026, 5, 16, 10, 0, 0, 0, time.UTC)
-	})
+	}, 2)
 
 	snapshot, err := provider.List(context.Background(), true)
 	if err != nil {
@@ -58,5 +58,43 @@ func TestDebugProviderReturnsContextError(t *testing.T) {
 	_, err := NewDebugProvider().List(ctx, false)
 	if err != context.Canceled {
 		t.Fatalf("expected context canceled, got %v", err)
+	}
+}
+
+func TestDebugProviderUsesGPUCount(t *testing.T) {
+	provider := newDebugProvider(func() time.Time {
+		return time.Date(2026, 5, 16, 10, 0, 0, 0, time.UTC)
+	}, 8)
+
+	snapshot, err := provider.List(context.Background(), false)
+	if err != nil {
+		t.Fatalf("list debug snapshot: %v", err)
+	}
+	if got := len(snapshot.Devices); got != 8 {
+		t.Fatalf("expected 8 debug devices, got %d", got)
+	}
+}
+
+func TestDebugGPUCountFromEnv(t *testing.T) {
+	tests := []struct {
+		name  string
+		value string
+		want  int
+	}{
+		{name: "empty", value: "", want: defaultDebugGPUCount},
+		{name: "custom", value: "8", want: 8},
+		{name: "zero", value: "0", want: 0},
+		{name: "invalid", value: "many", want: defaultDebugGPUCount},
+		{name: "negative", value: "-1", want: defaultDebugGPUCount},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Setenv(debugGPUCountEnv, test.value)
+
+			if got := debugGPUCountFromEnv(); got != test.want {
+				t.Fatalf("expected %d, got %d", test.want, got)
+			}
+		})
 	}
 }

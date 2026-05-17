@@ -4,25 +4,33 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"os"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/deniskrumko/nvidia-smi-web-ui/pkg/gpuinfo"
 )
 
-const gib = 1024 * 1024 * 1024
+const (
+	debugGPUCountEnv     = "DEBUG_GPU_COUNT"
+	defaultDebugGPUCount = 2
+	gib                  = 1024 * 1024 * 1024
+)
 
 // DebugProvider returns synthetic GPU snapshots without initializing NVML.
 type DebugProvider struct {
-	now func() time.Time
+	now   func() time.Time
+	count int
 }
 
 // NewDebugProvider creates a provider for local UI development without GPU access.
 func NewDebugProvider() *DebugProvider {
-	return newDebugProvider(time.Now)
+	return newDebugProvider(time.Now, debugGPUCountFromEnv())
 }
 
-func newDebugProvider(now func() time.Time) *DebugProvider {
-	return &DebugProvider{now: now}
+func newDebugProvider(now func() time.Time, count int) *DebugProvider {
+	return &DebugProvider{now: now, count: count}
 }
 
 // List returns a synthetic GPU snapshot with values that change over time.
@@ -38,17 +46,42 @@ func (provider *DebugProvider) List(ctx context.Context, includeProcesses bool) 
 	nvmlVersion := "debug-nvml-disabled"
 	cudaVersion := "debug-cuda"
 
+	devices := make([]gpuinfo.Device, 0, provider.count)
+	for index := range provider.count {
+		devices = append(devices, debugDevice(now, index, debugDeviceName(index), debugDeviceMemory(index), float64(index)*1.35, includeProcesses))
+	}
+
 	return gpuinfo.Snapshot{
 		System: gpuinfo.SystemInfo{
 			DriverVersion:     &driverVersion,
 			NVMLVersion:       &nvmlVersion,
 			CUDADriverVersion: &cudaVersion,
 		},
-		Devices: []gpuinfo.Device{
-			debugDevice(now, 0, "NVIDIA Debug RTX 4090", 24*gib, 0.00, includeProcesses),
-			debugDevice(now, 1, "NVIDIA Debug L40S", 48*gib, 1.35, includeProcesses),
-		},
+		Devices: devices,
 	}, nil
+}
+
+func debugGPUCountFromEnv() int {
+	value := strings.TrimSpace(os.Getenv(debugGPUCountEnv))
+	if value == "" {
+		return defaultDebugGPUCount
+	}
+
+	count, err := strconv.Atoi(value)
+	if err != nil || count < 0 {
+		return defaultDebugGPUCount
+	}
+	return count
+}
+
+func debugDeviceName(index int) string {
+	names := []string{"NVIDIA Debug RTX 4090", "NVIDIA Debug L40S"}
+	return names[index%len(names)]
+}
+
+func debugDeviceMemory(index int) uint64 {
+	totalMemory := []uint64{24 * gib, 48 * gib}
+	return totalMemory[index%len(totalMemory)]
 }
 
 func debugDevice(now time.Time, index int, name string, totalMemory uint64, offset float64, includeProcesses bool) gpuinfo.Device {

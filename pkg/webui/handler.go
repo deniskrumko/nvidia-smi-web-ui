@@ -2,19 +2,17 @@ package webui
 
 import (
 	"context"
-	"embed"
 	"encoding/json"
 	"html/template"
 	"net/http"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
 	"github.com/deniskrumko/nvidia-smi-web-ui/pkg/gpuinfo"
 )
-
-//go:embed static/* static/favicon/* templates/*.html
-var assetFS embed.FS
 
 const defaultPageTitle = "Nvidia SMI Web UI"
 const defaultVersion = "local"
@@ -30,13 +28,17 @@ type Config struct {
 	Branding         string
 	Title            string
 	Version          string
+	StaticDir        string // optional directory served at /static and used as the favicon root
+	TemplatesDir     string // optional directory containing web UI HTML templates
 	Now              func() time.Time
 }
 
 // NewHandler creates an HTTP handler for the web UI and stateless JSON API.
 func NewHandler(config Config) http.Handler {
+	staticDir := textOrDefault(config.StaticDir, defaultAssetDir("static"))
+	templatesDir := textOrDefault(config.TemplatesDir, defaultAssetDir("templates"))
 	renderer := &renderer{
-		templates: template.Must(template.ParseFS(assetFS, "templates/*.html")),
+		templates: template.Must(template.ParseGlob(filepath.Join(templatesDir, "*.html"))),
 		branding:  textOrDefault(config.Branding, defaultPageTitle),
 		title:     textOrDefault(config.Title, textOrDefault(config.Branding, defaultPageTitle)),
 		version:   textOrDefault(config.Version, readVersionFile(".version")),
@@ -48,32 +50,11 @@ func NewHandler(config Config) http.Handler {
 	}
 
 	mux := http.NewServeMux()
-	for _, asset := range rootStaticAssets {
-		asset := asset
-		mux.HandleFunc("GET "+asset.path, func(response http.ResponseWriter, request *http.Request) {
-			serveRootStaticAsset(response, request, asset)
-		})
-	}
-	mux.Handle("GET /static/", http.FileServer(http.FS(assetFS)))
+	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.Dir(staticDir))))
+	mux.Handle("GET /favicon/", http.StripPrefix("/favicon/", http.FileServer(http.Dir(filepath.Join(staticDir, "favicon")))))
 	mux.HandleFunc("GET /api/gpus", renderer.gpus)
 	mux.HandleFunc("GET /", renderer.index)
 	return mux
-}
-
-type rootStaticAsset struct {
-	path        string
-	file        string
-	contentType string
-}
-
-var rootStaticAssets = []rootStaticAsset{
-	{path: "/favicon/favicon.svg", file: "static/favicon/favicon.svg", contentType: "image/svg+xml"},
-	{path: "/favicon/favicon-96x96.png", file: "static/favicon/favicon-96x96.png", contentType: "image/png"},
-	{path: "/favicon/favicon.ico", file: "static/favicon/favicon.ico", contentType: "image/x-icon"},
-	{path: "/favicon/apple-touch-icon.png", file: "static/favicon/apple-touch-icon.png", contentType: "image/png"},
-	{path: "/favicon/web-app-manifest-192x192.png", file: "static/favicon/web-app-manifest-192x192.png", contentType: "image/png"},
-	{path: "/favicon/web-app-manifest-512x512.png", file: "static/favicon/web-app-manifest-512x512.png", contentType: "image/png"},
-	{path: "/favicon/site.webmanifest", file: "static/favicon/site.webmanifest", contentType: "application/manifest+json"},
 }
 
 type renderer struct {
@@ -118,11 +99,6 @@ func (renderer *renderer) index(response http.ResponseWriter, request *http.Requ
 	}
 }
 
-func serveRootStaticAsset(response http.ResponseWriter, request *http.Request, asset rootStaticAsset) {
-	response.Header().Set("Content-Type", asset.contentType)
-	http.ServeFileFS(response, request, assetFS, asset.file)
-}
-
 func (renderer *renderer) gpus(response http.ResponseWriter, request *http.Request) {
 	if renderer.provider == nil {
 		writeJSONError(response, http.StatusServiceUnavailable, "GPU provider is not configured")
@@ -164,4 +140,28 @@ func readVersionFile(path string) string {
 		return defaultVersion
 	}
 	return textOrDefault(strings.TrimSpace(string(content)), defaultVersion)
+}
+
+func defaultAssetDir(name string) string {
+	candidates := []string{
+		name,
+		filepath.Join("pkg", "webui", name),
+		filepath.Join(packageDir(), name),
+	}
+
+	for _, candidate := range candidates {
+		if info, err := os.Stat(candidate); err == nil && info.IsDir() {
+			return candidate
+		}
+	}
+
+	return name
+}
+
+func packageDir() string {
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		return "."
+	}
+	return filepath.Dir(file)
 }

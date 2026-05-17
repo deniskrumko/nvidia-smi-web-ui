@@ -370,8 +370,7 @@ select {
 .last-update {
   color: #405169;
   font-size: 0.84rem;
-  min-width: 132px;
-  width: 132px;
+  min-width: 112px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

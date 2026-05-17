@@ -3,6 +3,7 @@
 APP_NAME ?= nvidia-smi-web-ui
 IMAGE ?= $(APP_NAME):latest
 GOBIN ?= $$(go env GOPATH)/bin
+DEBUG_GPU_COUNT ?= 8
 
 list:
 	go run main.go list
@@ -11,7 +12,7 @@ web:
 	go run main.go web
 
 debug:
-	NVIDIA_SMI_WEB_UI_DEBUG=1 go run main.go web
+	NVIDIA_SMI_WEB_UI_DEBUG=1 DEBUG_GPU_COUNT=$(DEBUG_GPU_COUNT) go run main.go web
 
 tidy:
 	go mod tidy

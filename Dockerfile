@@ -18,6 +18,8 @@ FROM ${RUNTIME_IMAGE}
 WORKDIR /app
 COPY --from=build /out/nvidia-smi-web-ui /usr/local/bin/nvidia-smi-web-ui
 COPY --from=build /src/.version .version
+COPY --from=build /src/pkg/webui/static pkg/webui/static
+COPY --from=build /src/pkg/webui/templates pkg/webui/templates
 
 ENTRYPOINT ["nvidia-smi-web-ui"]
 CMD ["help"]
