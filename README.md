@@ -12,7 +12,15 @@ Web dashboard for monitoring NVIDIA GPUs through NVML. Like `nvidia-smi` but coo
 
 Unsupported optional NVML metrics do not stop the application. They are reported as warnings because metric availability can depend on GPU generation, driver version, MIG mode, permissions, and platform.
 
-## Docker
+## Run app using Docker
+
+### Requirements
+
+- Direct access to host with GPU devices
+- Installed [Docker](https://docs.docker.com/engine/install/) to pull/run image
+- Installed [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) to access GPUs from Docker
+
+### How to run app
 
 Pull the docker image (only `90.2MB`):
 
@@ -24,16 +32,16 @@ Run the web UI on a GPU host:
 
 ```bash
 docker run --rm \
-  --gpus all \
-  -p 8080:8080 \
-  deniskrumko/nvidia-smi-web-ui:latest
+    --gpus all \
+    -p 8080:8080 \
+    deniskrumko/nvidia-smi-web-ui:latest
 ```
 
 Open the dashboard at http://localhost:8080
 
 ### Docker run examples
 
-Run with custom page branding in the top-left corner of UI:
+Run with custom page branding in the top-left corner of UI (`WEB_PAGE_BRANDING`) and tab title (`WEB_PAGE_TITLE`):
 
 ```bash
 docker run --rm \
@@ -51,6 +59,61 @@ docker run --rm \
   --gpus '"device=0,1"' \
   -p 8080:8080 \
   deniskrumko/nvidia-smi-web-ui:latest
+```
+
+## Run app from source
+
+Use this path when you want to run the app directly with Go instead of Docker.
+
+### Requirements
+
+- Go 1.26.3 or newer
+- Linux host with NVIDIA drivers and `libnvidia-ml.so.1` available at runtime
+- NVIDIA GPU visible to NVML
+
+### Run from a local checkout
+
+Clone the repository and start the web server:
+
+```bash
+git clone https://github.com/deniskrumko/nvidia-smi-web-ui.git
+cd nvidia-smi-web-ui
+go run . web --addr :8080
+```
+
+Open the dashboard at http://localhost:8080
+
+Run on another port:
+
+```bash
+go run . web --addr :9090
+```
+
+Run without NVML by using synthetic GPU data:
+
+```bash
+NVIDIA_SMI_WEB_UI_DEBUG=1 DEBUG_GPU_COUNT=4 go run . web --addr :8080
+```
+
+### Run directly from GitHub
+
+If the project is available at [deniskrumko/nvidia-smi-web-ui](https://github.com/deniskrumko/nvidia-smi-web-ui), Go can download and run it directly:
+
+```bash
+go run github.com/deniskrumko/nvidia-smi-web-ui@latest web --addr :8080
+```
+
+Run a specific release tag:
+
+```bash
+go run github.com/deniskrumko/nvidia-smi-web-ui@v0.1.0 web --addr :8080
+```
+
+Install the binary into `GOBIN`:
+
+```bash
+go install github.com/deniskrumko/nvidia-smi-web-ui@latest
+nvidia-smi-web-ui web --addr :8080
 ```
 
 ## Configuration
