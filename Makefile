@@ -45,7 +45,7 @@ docker-build:
 	docker build -t $(IMAGE) .
 
 docker-run:
-	docker run --rm --gpus all $(IMAGE) list
+	docker run --rm --gpus all -p 8080:8080 $(IMAGE)
 
 install-tools:
 	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest

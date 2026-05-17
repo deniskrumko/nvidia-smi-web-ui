@@ -21,5 +21,7 @@ COPY --from=build /src/.version .version
 COPY --from=build /src/pkg/webui/static pkg/webui/static
 COPY --from=build /src/pkg/webui/templates pkg/webui/templates
 
+EXPOSE 8080
+
 ENTRYPOINT ["nvidia-smi-web-ui"]
-CMD ["help"]
+CMD ["web", "--addr", ":8080"]

@@ -1,153 +1,118 @@
 # nvidia-smi-web-ui
 
-CLI-first Go backend foundation and local web UI for collecting NVIDIA GPU information through NVML.
+[![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/deniskrumko/nvidia-smi-web-ui/build-image-and-push.yml)](https://github.com/deniskrumko/nvidia-smi-web-ui/actions)
+[![GitHub Release](https://img.shields.io/github/v/release/deniskrumko/nvidia-smi-web-ui)](https://github.com/deniskrumko/nvidia-smi-web-ui/releases)
+[![Docker pulls](https://img.shields.io/docker/pulls/deniskrumko/nvidia-smi-web-ui)](https://hub.docker.com/r/deniskrumko/nvidia-smi-web-ui/tags)
 
-The project currently provides a local CLI similar in spirit to `nvidia-smi` plus a single-page monitoring dashboard for live GPU charts.
+Web dashboard for monitoring NVIDIA GPUs through NVML.
 
-## Requirements
+`nvidia-smi-web-ui` runs as a local web application and shows live GPU utilization, memory usage, temperature, power, clocks, PCI details, ECC data, and other metrics exposed by NVIDIA Management Library. The browser keeps chart history in memory, so refreshing or closing the tab starts a fresh monitoring session.
 
-- Go 1.26.3 or newer toolchain.
-- Linux host with NVIDIA drivers and `libnvidia-ml.so.1` available at runtime.
-- NVIDIA GPU visible to NVML.
-- Docker GPU execution requires NVIDIA Container Toolkit and `docker run --gpus all`.
-
-The project can compile and run unit tests on non-GPU machines. Real NVML commands must run on a machine with NVIDIA drivers.
-
-## Local Usage
-
-Show CLI help:
-
-```bash
-go run main.go
-```
-
-List GPUs:
-
-```bash
-go run main.go list
-```
-
-List GPUs as JSON:
-
-```bash
-go run main.go list --json
-```
-
-Inspect one GPU by index or UUID:
-
-```bash
-go run main.go inspect --id 0
-go run main.go inspect --uuid GPU-00000000-0000-0000-0000-000000000000
-```
-
-List GPU processes:
-
-```bash
-go run main.go processes
-```
-
-Run the local web UI:
-
-```bash
-go run main.go web
-```
-
-Run the local web UI with synthetic GPU data and without initializing NVML:
-
-```bash
-make debug
-```
-
-By default, debug mode serves 8 synthetic GPUs. Override it with `DEBUG_GPU_COUNT=4 make debug`.
-
-The web UI serves a stateless API at `/api/gpus` and keeps chart history only in the memory of the open browser tab. Refreshing or closing the tab clears the collected chart data.
-
-Optional web UI branding:
-
-```bash
-WEB_PAGE_BRANDING="Server GPU Monitor" go run main.go web
-WEB_PAGE_TITLE="GPU Dashboard" WEB_PAGE_BRANDING="Server GPU Monitor" go run main.go web
-```
-
-Useful flags:
-
-- `--json`: render machine-readable JSON.
-- `--warnings`: include per-field NVML collection warnings in table mode.
-- `--no-processes`: skip process collection for `list` and `inspect`.
-
-Unsupported metrics do not fail the whole command. They are recorded as warnings because NVML support differs by GPU generation, driver version, MIG mode, permissions, and platform.
-
-## Make Commands
-
-```bash
-make run
-make web
-make debug
-make fmt
-make lint
-make tests
-make docker-build
-make docker-run
-```
-
-`make tests` runs the standard Go test suite with `go test ./...`.
+Unsupported optional NVML metrics do not stop the application. They are reported as warnings because metric availability can depend on GPU generation, driver version, MIG mode, permissions, and platform.
 
 ## Docker
 
-Build the image:
+Pull the published image:
 
 ```bash
-make docker-build
+docker pull deniskrumko/nvidia-smi-web-ui:latest
 ```
 
-Run on a GPU host:
+Run the web UI on a GPU host:
 
 ```bash
-docker run --rm --gpus all nvidia-smi-web-ui:latest list
-docker run --rm --gpus all nvidia-smi-web-ui:latest list --json
+docker run --rm \
+  --gpus all \
+  -p 8080:8080 \
+  deniskrumko/nvidia-smi-web-ui:latest
 ```
 
-The default runtime image is `debian:bookworm-slim`. A CUDA-based image is not required for NVML-only reads: `libnvidia-ml.so.1` is provided by the NVIDIA driver on the host and mounted into the container by NVIDIA Container Toolkit when the container is started with `--gpus all`.
+Open the dashboard at http://localhost:8080.
 
-The runtime image can be overridden:
+Run with custom page branding:
+
+```bash
+docker run --rm \
+  --gpus all \
+  -p 8080:8080 \
+  -e WEB_PAGE_BRANDING="Server GPU Monitor" \
+  -e WEB_PAGE_TITLE="GPU Dashboard" \
+  deniskrumko/nvidia-smi-web-ui:latest
+```
+
+Run without NVML by using synthetic GPU data:
+
+```bash
+docker run --rm \
+  -p 8080:8080 \
+  -e NVIDIA_SMI_WEB_UI_DEBUG=1 \
+  -e DEBUG_GPU_COUNT=4 \
+  deniskrumko/nvidia-smi-web-ui:latest
+```
+
+Limit visible GPUs with Docker's GPU device selector:
+
+```bash
+docker run --rm \
+  --gpus '"device=0,1"' \
+  -p 8080:8080 \
+  deniskrumko/nvidia-smi-web-ui:latest
+```
+
+Build the image locally:
 
 ```bash
 docker build \
-  --build-arg RUNTIME_IMAGE=debian:bookworm-slim \
-  -t nvidia-smi-web-ui:latest .
+  --build-arg NVIDIA_SMI_WEB_UI_VERSION=local \
+  -t deniskrumko/nvidia-smi-web-ui:latest .
 ```
 
-The previous CUDA runtime variant is kept as `Dockerfile.cuda` for reference:
+## Configuration
+
+Runtime configuration is provided through environment variables. The image starts the web server on `:8080` by default.
+
+| Name | Default | Description |
+| --- | --- | --- |
+| `WEB_PAGE_BRANDING` | `Nvidia SMI Web UI` | Text displayed as the dashboard branding. Also used as the page title when `WEB_PAGE_TITLE` is not set. |
+| `WEB_PAGE_TITLE` | `WEB_PAGE_BRANDING` or `Nvidia SMI Web UI` | Browser page title. |
+| `NVIDIA_SMI_WEB_UI_DEBUG` | unset | Enables synthetic GPU data and skips NVML initialization when set to `1`, `true`, or `yes`. |
+| `DEBUG_GPU_COUNT` | `2` | Number of synthetic GPUs shown in debug mode. Invalid values fall back to the default. |
+
+Override the HTTP listen address by passing a custom web command:
 
 ```bash
-docker build -f Dockerfile.cuda -t nvidia-smi-web-ui:cuda .
+docker run --rm \
+  --gpus all \
+  -p 9090:9090 \
+  deniskrumko/nvidia-smi-web-ui:latest web --addr :9090
 ```
+
+Build-time Docker arguments:
+
+| Name | Default | Description |
+| --- | --- | --- |
+| `GO_IMAGE` | `golang:1.26.3-bookworm` | Go builder image used by the Docker build. |
+| `RUNTIME_IMAGE` | `debian:bookworm-slim` | Final runtime image used by the Docker build. |
+| `NVIDIA_SMI_WEB_UI_VERSION` | `local` | Docker build argument written to `.version` and displayed by the web UI. |
+
+## API
+
+The web application serves the dashboard at `/` and exposes the current GPU snapshot at:
+
+```text
+GET /api/gpus
+```
+
+The endpoint is stateless. Each request reads a fresh NVML snapshot and returns JSON DTOs used by the dashboard.
 
 ## Architecture
 
-- `main.go`: thin entrypoint with signal-aware context.
-- `cmd/...`: Cobra command wiring.
-- `app/gpu`: use-case layer for CLI and future API transports.
-- `app/web`: HTTP server lifecycle for the local web UI.
-- `pkg/nvmlclient`: NVML lifecycle, hardware adapter, snapshot collection, warnings.
-- `pkg/gpuinfo`: exported DTOs intended for future HTTP responses.
-- `pkg/output`: JSON and table rendering.
-- `pkg/webui`: server-rendered HTML shell, stateless JSON API handlers, templates, and static assets.
+- `main.go`: signal-aware application entrypoint.
+- `cmd/web`: web command wiring and environment-based configuration.
+- `app/web`: HTTP server lifecycle.
+- `app/gpu`: application layer for GPU snapshots.
+- `pkg/nvmlclient`: NVML lifecycle, hardware adapter, snapshot collection, and warnings.
+- `pkg/gpuinfo`: API-ready response DTOs.
+- `pkg/webui`: server-rendered HTML shell, JSON API handlers, templates, and static assets.
 
-The NVML client initializes NVML once per command and shuts it down at the same ownership level. Fatal errors are limited to initialization, device count, and device handle lookup. Optional per-metric failures become structured warnings.
-
-## Testing
-
-Run unit tests:
-
-```bash
-make tests
-```
-
-Run the optional integration test on a Linux GPU host:
-
-```bash
-NVML_INTEGRATION=1 go test ./pkg/nvmlclient -run TestIntegrationNVML -count=1
-```
-
-The default test suite uses fake NVML implementations, so it does not require GPU hardware.
+NVML initialization and shutdown happen once per application run. Fatal NVML errors are limited to initialization, device count, invalid target device, and handle lookup failures.
