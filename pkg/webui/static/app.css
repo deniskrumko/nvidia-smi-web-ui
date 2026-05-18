@@ -180,6 +180,7 @@ h1 {
 }
 
 .dropdown-actions {
+  align-items: center;
   display: flex;
   gap: 8px;
   margin-bottom: 10px;
@@ -191,6 +192,31 @@ h1 {
   border: var(--ui-border);
   color: #25364f;
   padding: 6px 10px;
+}
+
+.host-control {
+  align-items: center;
+  display: flex;
+  justify-content: flex-end;
+  margin-left: auto;
+  min-width: 180px;
+}
+
+.host-static,
+.host-select-label {
+  align-items: center;
+  color: #405169;
+  display: inline-flex;
+  font-size: 0.86rem;
+  font-weight: 700;
+  gap: 7px;
+  min-height: 36px;
+}
+
+.host-select-label select {
+  min-height: 34px;
+  min-width: 140px;
+  padding: 5px 28px 5px 9px;
 }
 
 .device-list {
@@ -665,6 +691,17 @@ canvas {
 
   .refresh-section {
     flex-wrap: wrap;
+  }
+
+  .dropdown-actions {
+    flex-wrap: wrap;
+  }
+
+  .host-control {
+    justify-content: flex-start;
+    margin-left: 0;
+    min-width: 0;
+    width: 100%;
   }
 
   .primary-action {

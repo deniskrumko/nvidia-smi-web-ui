@@ -88,6 +88,7 @@
     deviceList: document.querySelector("[data-device-list]"),
     selectAll: document.querySelector("[data-select-all]"),
     clearAll: document.querySelector("[data-clear-all]"),
+    hostControl: document.querySelector("[data-host-control]"),
     chartSelectAll: document.querySelector("[data-chart-select-all]"),
     chartClearAll: document.querySelector("[data-chart-clear-all]"),
     refreshInterval: document.querySelector("[data-refresh-interval]"),
@@ -99,6 +100,8 @@
   };
 
   const params = new URLSearchParams(window.location.search);
+  const hostOptions = parseHostConfig(dom.appShell ? dom.appShell.dataset.hosts : "[]");
+  const defaultHostIndex = defaultHostOption(hostOptions);
   const initialGPUParam = params.get("gpu");
   const initialChartIds = parseChartParam(params.get("charts"));
   const initialFocusedChart = parseChartIDParam(params.get("chart"));
@@ -107,6 +110,7 @@
     devices: new Map(),
     selectedIds: new Set(parseGPUParam(initialGPUParam)),
     selectedChartIds: new Set(initialChartIds === null ? defaultChartIds : initialChartIds),
+    hostIndex: parseHostParam(params.get("host"), hostOptions, defaultHostIndex),
     explicitSelection: Boolean(initialGPUParam),
     focusedChart: initialFocusedChart,
     hoverTime: null,
@@ -114,6 +118,7 @@
     timeWindow: 300000,
     timer: 0,
     fetching: false,
+    requestID: 0,
     lastUpdate: null,
   };
   if (state.focusedChart && !state.selectedChartIds.has(state.focusedChart)) {
@@ -125,10 +130,12 @@
   tooltip.className = "tooltip";
   document.body.appendChild(tooltip);
 
+  renderHostControl();
   renderChartShells();
   bindControls();
   renderChartSelector();
   renderControlSummaries();
+  updateURL();
   fetchSnapshot();
   scheduleRefresh();
   window.addEventListener("resize", renderAll);
@@ -275,10 +282,13 @@
 
   async function fetchSnapshot() {
     if (state.fetching) return;
+    const requestID = state.requestID + 1;
+    state.requestID = requestID;
     state.fetching = true;
     try {
-      const response = await fetch("/api/gpus", { headers: { Accept: "application/json" } });
+      const response = await fetch(gpuAPIURL(), { headers: { Accept: "application/json" } });
       const payload = await response.json();
+      if (requestID !== state.requestID) return;
       if (!response.ok) {
         throw new Error(payload.error || `Request failed with status ${response.status}`);
       }
@@ -286,10 +296,14 @@
       state.lastUpdate = Date.now();
       updateStatus();
     } catch (error) {
-      updateStatus("error", error.message);
+      if (requestID === state.requestID) {
+        updateStatus("error", error.message);
+      }
     } finally {
-      state.fetching = false;
-      scheduleRefresh();
+      if (requestID === state.requestID) {
+        state.fetching = false;
+        scheduleRefresh();
+      }
     }
   }
 
@@ -410,6 +424,39 @@
   function renderControlSummaries() {
     renderGPUSummary();
     renderChartSummary();
+  }
+
+  function renderHostControl() {
+    if (!dom.hostControl) return;
+    dom.hostControl.innerHTML = "";
+
+    if (hostOptions.length === 0) {
+      const label = document.createElement("span");
+      label.className = "host-static";
+      label.textContent = "Host: local";
+      dom.hostControl.appendChild(label);
+      return;
+    }
+
+    const label = document.createElement("label");
+    label.className = "host-select-label";
+
+    const text = document.createElement("span");
+    text.textContent = "Host:";
+
+    const select = document.createElement("select");
+    select.setAttribute("aria-label", "GPU host");
+    for (const host of hostOptions) {
+      const option = document.createElement("option");
+      option.value = String(host.index);
+      option.textContent = host.name;
+      select.appendChild(option);
+    }
+    select.value = String(state.hostIndex);
+    select.addEventListener("change", () => selectHost(Number(select.value)));
+
+    label.append(text, select);
+    dom.hostControl.appendChild(label);
   }
 
   function renderGPUSummary() {
@@ -710,6 +757,11 @@
 
   function updateURL() {
     const next = new URLSearchParams(window.location.search);
+    if (hostOptions.length > 0) {
+      next.set("host", String(state.hostIndex));
+    } else {
+      next.delete("host");
+    }
     const allSelected = state.selectedIds.size === state.devices.size;
     if (!state.explicitSelection || allSelected) {
       next.delete("gpu");
@@ -737,6 +789,9 @@
   }
 
   function resetToDefaults() {
+    const hostChanged = hostOptions.length > 0 && state.hostIndex !== defaultHostIndex;
+    state.hostIndex = defaultHostIndex;
+    if (hostChanged) clearHostData();
     state.explicitSelection = false;
     state.selectedIds = new Set(state.devices.keys());
     state.selectedChartIds = new Set(defaultChartIds);
@@ -744,10 +799,48 @@
     state.hoverTime = null;
     tooltip.classList.remove("is-visible");
     closeDropdowns();
-    window.history.replaceState(null, "", window.location.pathname);
+    renderHostControl();
+    updateURL();
     renderChartSelector();
     renderChartShells();
     renderAll();
+    if (hostChanged) {
+      updateStatus();
+      fetchSnapshot();
+    }
+  }
+
+  function selectHost(index) {
+    if (state.hostIndex === index) return;
+    state.hostIndex = index;
+    state.explicitSelection = false;
+    state.selectedIds = new Set();
+    clearHostData();
+    tooltip.classList.remove("is-visible");
+    closeDropdowns();
+    updateURL();
+    renderHostControl();
+    renderAll();
+    updateStatus();
+    fetchSnapshot();
+  }
+
+  function clearHostData() {
+    window.clearTimeout(state.timer);
+    state.samples = [];
+    state.devices = new Map();
+    state.hoverTime = null;
+    state.lastUpdate = null;
+    state.fetching = false;
+    state.requestID += 1;
+  }
+
+  function gpuAPIURL() {
+    const url = new URL("/api/gpus", window.location.origin);
+    if (hostOptions.length > 0) {
+      url.searchParams.set("host", String(state.hostIndex));
+    }
+    return `${url.pathname}${url.search}`;
   }
 
   function samplesInRange() {
@@ -933,6 +1026,35 @@
   function parseGPUParam(value) {
     if (value === null || value === "" || value === "none") return [];
     return value.split(",").filter(Boolean);
+  }
+
+  function parseHostConfig(value) {
+    try {
+      const hosts = JSON.parse(value || "[]");
+      if (!Array.isArray(hosts)) return [];
+      return hosts
+        .map((host) => ({
+          index: Number(host.index),
+          name: String(host.name || "").trim(),
+          default: Boolean(host.default),
+        }))
+        .filter((host) => Number.isInteger(host.index) && host.index >= 0 && host.name !== "");
+    } catch {
+      return [];
+    }
+  }
+
+  function defaultHostOption(hosts) {
+    const host = hosts.find((option) => option.default) || hosts[0];
+    return host ? host.index : 0;
+  }
+
+  function parseHostParam(value, hosts, fallback) {
+    const index = Number(value);
+    if (Number.isInteger(index) && hosts.some((host) => host.index === index)) {
+      return index;
+    }
+    return fallback;
   }
 
   function selectedChartIds() {

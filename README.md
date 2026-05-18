@@ -41,14 +41,14 @@ Open the dashboard at http://localhost:8080
 
 ### Docker run examples
 
-Run with custom page branding in the top-left corner of UI (`WEB_PAGE_BRANDING`) and tab title (`WEB_PAGE_TITLE`):
+Run with custom page branding in the top-left corner of UI (`UI_BRANDING`) and tab title (`UI_TITLE`):
 
 ```bash
 docker run --rm \
   --gpus all \
   -p 8080:8080 \
-  -e WEB_PAGE_BRANDING="My GPU Monitor" \
-  -e WEB_PAGE_TITLE="GPU Dashboard" \
+  -e UI_BRANDING="My GPU Monitor" \
+  -e UI_TITLE="GPU Dashboard" \
   deniskrumko/nvidia-smi-web-ui:latest
 ```
 
@@ -92,7 +92,7 @@ go run . web --addr :9090
 Run without NVML by using synthetic GPU data:
 
 ```bash
-NVIDIA_SMI_WEB_UI_DEBUG=1 DEBUG_GPU_COUNT=4 go run . web --addr :8080
+DEBUG_MODE_ENABLED=1 DEBUG_MODE_GPU_COUNT=4 go run . web --addr :8080
 ```
 
 ### Run directly from GitHub
@@ -116,16 +116,40 @@ go install github.com/deniskrumko/nvidia-smi-web-ui@latest
 nvidia-smi-web-ui web --addr :8080
 ```
 
+## Multi-host configuration
+
+By default, the web UI reads GPU data from the same process that serves the dashboard. To use one dashboard as a shared entry point for several existing `nvidia-smi-web-ui` servers, configure remote hosts with indexed environment variables:
+
+```bash
+REMOTE_HOST_0_NAME="test"
+REMOTE_HOST_0_URL="nvidia-web-ui-rnd-kube.examoke.com/api/gpus"
+REMOTE_HOST_0_DEFAULT="true"
+```
+
+Add more hosts by incrementing the index: `REMOTE_HOST_1_NAME`, `REMOTE_HOST_1_URL`, and so on. Indexes must start at `0` and be contiguous because the UI stores the selected host as `host=N` in the URL. `REMOTE_HOST_*_NAME` is displayed in the UI host selector. `REMOTE_HOST_*_URL` must point to the remote server GPU API endpoint, usually `/api/gpus`. URLs without a scheme default to `https://`.
+
+When at least one `REMOTE_HOST_*` entry is configured, the local NVML provider is disabled for the web command. The local process only serves the dashboard and proxies `/api/gpus?host=N` to the selected remote host. The local host is not added to the selector automatically.
+
+If no remote hosts are configured, the selector is replaced with static text:
+
+```text
+Host: local
+```
+
+`REMOTE_HOST_*_DEFAULT` is optional and accepts `1`, `true`, or `yes`. If no default is set, the first configured host is selected. Only one host can be marked as default.
+
 ## Configuration
 
 Runtime configuration is provided through environment variables. The image starts the web server on `:8080` by default.
 
 | Name | Default | Description |
 | --- | --- | --- |
-| `WEB_PAGE_BRANDING` | `Nvidia SMI Web UI` | Text displayed as the dashboard branding. Also used as the page title when `WEB_PAGE_TITLE` is not set. |
-| `WEB_PAGE_TITLE` | `WEB_PAGE_BRANDING` or `Nvidia SMI Web UI` | Browser page title. |
-| `NVIDIA_SMI_WEB_UI_DEBUG` | unset | Enables synthetic GPU data and skips NVML initialization when set to `1`, `true`, or `yes`. |
-| `DEBUG_GPU_COUNT` | `2` | Number of synthetic GPUs shown in debug mode. Invalid values fall back to the default. |
+| `UI_BRANDING` | `Nvidia SMI Web UI` | Text displayed as the dashboard branding. Also used as the page title when `UI_TITLE` is not set. |
+| `UI_TITLE` | `UI_BRANDING` or `Nvidia SMI Web UI` | Browser page title. |
+| `DEBUG_MODE_ENABLED` | unset | Enables synthetic GPU data and skips NVML initialization when set to `1`, `true`, or `yes`. |
+| `DEBUG_MODE_GPU_COUNT` | `2` | Number of synthetic GPUs shown in debug mode. Invalid values fall back to the default. |
+| `LOG_ACCESS_LOG_LEVEL` | `info` | Log level used only for JSON HTTP access logs: `debug`, `info`, `warn`, or `error`. |
+| `LOG_ACCESS_LOG_ENABLED` | `true` | Enables JSON HTTP access logs when set to `1`, `true`, or `yes`. Set to `false` or `0` to disable them. |
 
 Override the HTTP listen address by passing a custom web command:
 
@@ -160,7 +184,7 @@ Health checks can use:
 GET /api/health
 ```
 
-It returns HTTP 200 with `{"status":"ok"}` only when the application can read at least one GPU through the configured GPU provider. If GPU access is unavailable, it returns HTTP 503.
+It returns HTTP 200 with `{"status":"ok"}` when the web server is running. It does not check local or remote GPU access.
 
 ## About this project
 

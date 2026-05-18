@@ -1,5 +1,5 @@
 {{define "content"}}
-<main class="app-shell" data-branding="{{.Branding}}">
+<main class="app-shell" data-branding="{{.Branding}}" data-hosts="{{.HostsJSON}}">
   <header class="topbar">
     <a class="brand" href="/" data-brand-reset aria-label="Reset dashboard filters">
       <img class="brand-logo" src="/static/logo_s.png" alt="" width="200" height="147" aria-hidden="true">
@@ -14,6 +14,7 @@
         <div class="dropdown-actions">
           <button type="button" data-select-all>Select all</button>
           <button type="button" data-clear-all>Clear all</button>
+          <div class="host-control" data-host-control></div>
         </div>
         <div class="device-list" data-device-list>
           <span class="muted">Waiting for devices...</span>

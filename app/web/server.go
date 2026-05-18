@@ -7,11 +7,15 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/deniskrumko/nvidia-smi-web-ui/pkg/utils"
 	"github.com/deniskrumko/nvidia-smi-web-ui/pkg/webui"
 )
 
 // SnapshotProvider provides point-in-time GPU snapshots for the web server.
 type SnapshotProvider = webui.SnapshotProvider
+
+// RemoteHost describes a GPU API served by another nvidia-smi-web-ui instance.
+type RemoteHost = webui.RemoteHost
 
 const (
 	defaultAddr     = ":8080"
@@ -22,6 +26,9 @@ const (
 type Config struct {
 	Addr             string
 	SnapshotProvider webui.SnapshotProvider
+	RemoteHosts      []RemoteHost
+	DisableAccessLog bool
+	AccessLogLevel   utils.LogLevel
 	Branding         string
 	Title            string
 }
@@ -69,6 +76,9 @@ func (config Config) listenAddr() string {
 func (config Config) handlerConfig() webui.Config {
 	return webui.Config{
 		SnapshotProvider: config.SnapshotProvider,
+		RemoteHosts:      config.RemoteHosts,
+		DisableAccessLog: config.DisableAccessLog,
+		AccessLogLevel:   config.AccessLogLevel,
 		Branding:         config.Branding,
 		Title:            config.Title,
 	}

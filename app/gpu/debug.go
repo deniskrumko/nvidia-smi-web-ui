@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	debugGPUCountEnv     = "DEBUG_GPU_COUNT"
+	debugGPUCountEnv     = "DEBUG_MODE_GPU_COUNT"
 	defaultDebugGPUCount = 2
 	gib                  = 1024 * 1024 * 1024
 )

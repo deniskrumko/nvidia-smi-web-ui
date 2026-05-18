@@ -2,6 +2,8 @@ package web
 
 import (
 	"fmt"
+	"io"
+	"log/slog"
 	"os"
 	"strings"
 
@@ -10,7 +12,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const debugEnv = "NVIDIA_SMI_WEB_UI_DEBUG"
+const debugModeEnv = "DEBUG_MODE_ENABLED"
+const accessLogLevelEnv = "LOG_ACCESS_LOG_LEVEL"
+const accessLogEnv = "LOG_ACCESS_LOG_ENABLED"
+const uiBrandingEnv = "UI_BRANDING"
+const uiTitleEnv = "UI_TITLE"
 
 // New creates the web command.
 func New() *cobra.Command {
@@ -19,12 +25,26 @@ func New() *cobra.Command {
 		Use:   "web",
 		Short: "Run the local web UI",
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			configureLogger()
+			accessLogLevel, err := accessLogLevelFromEnv(os.Getenv(accessLogLevelEnv))
+			if err != nil {
+				return err
+			}
+
+			remoteHosts, err := remoteHostsFromEnv()
+			if err != nil {
+				return err
+			}
+			if len(remoteHosts) > 0 {
+				return run(cmd, addr, nil, remoteHosts, accessLogLevel, " with remote GPU hosts")
+			}
+
 			if debugEnabled() {
-				return run(cmd, addr, gpu.NewDebugProvider(), " with debug GPU data and NVML disabled")
+				return run(cmd, addr, gpu.NewDebugProvider(), nil, accessLogLevel, " with debug GPU data and NVML disabled")
 			}
 
 			return gpu.WithService(func(service *gpu.Service) error {
-				return run(cmd, addr, service, "")
+				return run(cmd, addr, service, nil, accessLogLevel, "")
 			})
 		},
 	}
@@ -32,23 +52,64 @@ func New() *cobra.Command {
 	return command
 }
 
-func run(cmd *cobra.Command, addr string, provider webapp.SnapshotProvider, suffix string) error {
-	_, err := fmt.Fprintf(cmd.OutOrStdout(), "Serving web UI at http://%s%s\n", displayAddr(addr), suffix)
-	if err != nil {
-		return err
-	}
+func run(cmd *cobra.Command, addr string, provider webapp.SnapshotProvider, remoteHosts []webapp.RemoteHost, accessLogLevel slog.Level, suffix string) error {
+	slog.InfoContext(cmd.Context(), "Serving web UI at",
+		"url", "http://"+displayAddr(addr),
+		"mode", servingMode(suffix),
+	)
 
 	return webapp.Run(cmd.Context(), webapp.Config{
 		Addr:             addr,
 		SnapshotProvider: provider,
-		Branding:         os.Getenv("WEB_PAGE_BRANDING"),
+		RemoteHosts:      remoteHosts,
+		DisableAccessLog: !accessLogEnabled(),
+		AccessLogLevel:   accessLogLevel,
+		Branding:         os.Getenv(uiBrandingEnv),
 		Title:            pageTitle(),
 	})
 }
 
 func debugEnabled() bool {
-	value := strings.TrimSpace(os.Getenv(debugEnv))
-	return value == "1" || strings.EqualFold(value, "true") || strings.EqualFold(value, "yes")
+	return truthy(os.Getenv(debugModeEnv))
+}
+
+func accessLogEnabled() bool {
+	value := strings.TrimSpace(os.Getenv(accessLogEnv))
+	if value == "" {
+		return true
+	}
+	return truthy(value)
+}
+
+func configureLogger() {
+	slog.SetDefault(slog.New(newLogHandler(os.Stderr)))
+}
+
+func newLogHandler(writer io.Writer) slog.Handler {
+	return slog.NewJSONHandler(writer, &slog.HandlerOptions{Level: slog.LevelDebug})
+}
+
+func accessLogLevelFromEnv(value string) (slog.Level, error) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", "info":
+		return slog.LevelInfo, nil
+	case "debug":
+		return slog.LevelDebug, nil
+	case "warn", "warning":
+		return slog.LevelWarn, nil
+	case "error":
+		return slog.LevelError, nil
+	default:
+		return slog.LevelInfo, fmt.Errorf("%s must be one of debug, info, warn, or error", accessLogLevelEnv)
+	}
+}
+
+func servingMode(suffix string) string {
+	mode := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(suffix), "with "))
+	if mode == "" {
+		return "local GPU data"
+	}
+	return mode
 }
 
 func displayAddr(addr string) string {
@@ -59,8 +120,8 @@ func displayAddr(addr string) string {
 }
 
 func pageTitle() string {
-	if title := os.Getenv("WEB_PAGE_TITLE"); title != "" {
+	if title := os.Getenv(uiTitleEnv); title != "" {
 		return title
 	}
-	return os.Getenv("WEB_PAGE_BRANDING")
+	return os.Getenv(uiBrandingEnv)
 }
