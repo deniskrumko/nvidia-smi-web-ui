@@ -213,6 +213,82 @@ func TestGPUAPIReturnsUnavailableWithoutProvider(t *testing.T) {
 	}
 }
 
+func TestHealthAPIReturnsOKWhenGPUIsAvailable(t *testing.T) {
+	index := 0
+	provider := &fakeProvider{
+		snapshot: gpuinfo.Snapshot{
+			Devices: []gpuinfo.Device{{Index: &index}},
+		},
+	}
+	request := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	response := httptest.NewRecorder()
+
+	webui.NewHandler(webui.Config{SnapshotProvider: provider}).ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, response.Code)
+	}
+	if provider.includeProcesses {
+		t.Fatal("expected health check to skip process collection")
+	}
+	if contentType := response.Header().Get("Content-Type"); contentType != "application/json; charset=utf-8" {
+		t.Fatalf("expected JSON content type, got %q", contentType)
+	}
+
+	var payload struct {
+		Status string `json:"status"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if payload.Status != "ok" {
+		t.Fatalf("expected status %q, got %q", "ok", payload.Status)
+	}
+}
+
+func TestHealthAPIReturnsUnavailableForProviderError(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	response := httptest.NewRecorder()
+
+	webui.NewHandler(webui.Config{
+		SnapshotProvider: &fakeProvider{err: errors.New("nvml failed")},
+	}).ServeHTTP(response, request)
+
+	if response.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected status %d, got %d", http.StatusServiceUnavailable, response.Code)
+	}
+	if body := response.Body.String(); !strings.Contains(body, "nvml failed") {
+		t.Fatalf("expected error response, got %q", body)
+	}
+}
+
+func TestHealthAPIReturnsUnavailableWithoutProvider(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	response := httptest.NewRecorder()
+
+	webui.NewHandler(webui.Config{}).ServeHTTP(response, request)
+
+	if response.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected status %d, got %d", http.StatusServiceUnavailable, response.Code)
+	}
+}
+
+func TestHealthAPIReturnsUnavailableWithoutGPUs(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	response := httptest.NewRecorder()
+
+	webui.NewHandler(webui.Config{
+		SnapshotProvider: &fakeProvider{},
+	}).ServeHTTP(response, request)
+
+	if response.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected status %d, got %d", http.StatusServiceUnavailable, response.Code)
+	}
+	if body := response.Body.String(); !strings.Contains(body, "GPU is not available") {
+		t.Fatalf("expected unavailable response, got %q", body)
+	}
+}
+
 type fakeProvider struct {
 	snapshot         gpuinfo.Snapshot
 	err              error

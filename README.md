@@ -154,6 +154,14 @@ GET /api/gpus
 
 The endpoint is stateless. Each request reads a fresh NVML snapshot and returns JSON DTOs used by the dashboard.
 
+Health checks can use:
+
+```text
+GET /api/health
+```
+
+It returns HTTP 200 with `{"status":"ok"}` only when the application can read at least one GPU through the configured GPU provider. If GPU access is unavailable, it returns HTTP 503.
+
 ## About this project
 
 The project is written in Go. The backend uses the standard `net/http` server, Cobra for command wiring, and `github.com/NVIDIA/go-nvml` for NVML access. The web UI is server-rendered HTML plus static CSS and vanilla JavaScript.

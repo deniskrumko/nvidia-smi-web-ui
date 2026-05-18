@@ -52,6 +52,7 @@ func NewHandler(config Config) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.Dir(staticDir))))
 	mux.Handle("GET /favicon/", http.StripPrefix("/favicon/", http.FileServer(http.Dir(filepath.Join(staticDir, "favicon")))))
+	mux.HandleFunc("GET /api/health", renderer.health)
 	mux.HandleFunc("GET /api/gpus", renderer.gpus)
 	mux.HandleFunc("GET /", renderer.index)
 	return mux
@@ -77,6 +78,10 @@ type gpuResponse struct {
 	Snapshot    gpuinfo.Snapshot `json:"snapshot"`
 }
 
+type healthResponse struct {
+	Status string `json:"status"`
+}
+
 type errorResponse struct {
 	Error string `json:"error"`
 }
@@ -97,6 +102,25 @@ func (renderer *renderer) index(response http.ResponseWriter, request *http.Requ
 	if err := renderer.templates.ExecuteTemplate(response, "layout.html", data); err != nil {
 		http.Error(response, err.Error(), http.StatusInternalServerError)
 	}
+}
+
+func (renderer *renderer) health(response http.ResponseWriter, request *http.Request) {
+	if renderer.provider == nil {
+		writeJSONError(response, http.StatusServiceUnavailable, "GPU provider is not configured")
+		return
+	}
+
+	snapshot, err := renderer.provider.List(request.Context(), false)
+	if err != nil {
+		writeJSONError(response, http.StatusServiceUnavailable, err.Error())
+		return
+	}
+	if len(snapshot.Devices) == 0 {
+		writeJSONError(response, http.StatusServiceUnavailable, "GPU is not available")
+		return
+	}
+
+	writeJSON(response, http.StatusOK, healthResponse{Status: "ok"})
 }
 
 func (renderer *renderer) gpus(response http.ResponseWriter, request *http.Request) {
