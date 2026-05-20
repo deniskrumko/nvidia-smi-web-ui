@@ -103,10 +103,11 @@ func TestServingMode(t *testing.T) {
 
 func TestRemoteHostsFromEnv(t *testing.T) {
 	hosts, err := remoteHostsFromValues([]string{
-		"REMOTE_HOST_0_NAME=lab",
-		"REMOTE_HOST_0_URL=nvidia-web-ui-rnd-kube.kolesa-team.org/api/gpus",
-		"REMOTE_HOST_1_NAME=stage",
-		"REMOTE_HOST_1_URL=http://127.0.0.1:9090/api/gpus",
+		"REMOTE_HOST_0_DISPLAY_NAME=lab",
+		"REMOTE_HOST_0_HOST_NAME=nvidia-web-ui-rnd-kube.kolesa-team.org",
+		"REMOTE_HOST_1_DISPLAY_NAME=stage",
+		"REMOTE_HOST_1_HOST_NAME=http://127.0.0.1:9090",
+		"REMOTE_HOST_1_PATH=/api/custom-gpus",
 		"REMOTE_HOST_1_DEFAULT=true",
 	})
 	if err != nil {
@@ -118,15 +119,15 @@ func TestRemoteHostsFromEnv(t *testing.T) {
 	if hosts[0].Name != "lab" || hosts[0].URL != "https://nvidia-web-ui-rnd-kube.kolesa-team.org/api/gpus" || hosts[0].Default {
 		t.Fatalf("unexpected first host: %#v", hosts[0])
 	}
-	if hosts[1].Name != "stage" || hosts[1].URL != "http://127.0.0.1:9090/api/gpus" || !hosts[1].Default {
+	if hosts[1].Name != "stage" || hosts[1].URL != "http://127.0.0.1:9090/api/custom-gpus" || !hosts[1].Default {
 		t.Fatalf("unexpected second host: %#v", hosts[1])
 	}
 }
 
 func TestRemoteHostsFromEnvDefaultsToFirstHost(t *testing.T) {
 	hosts, err := remoteHostsFromValues([]string{
-		"REMOTE_HOST_0_NAME=lab",
-		"REMOTE_HOST_0_URL=https://example.test/api/gpus",
+		"REMOTE_HOST_0_DISPLAY_NAME=lab",
+		"REMOTE_HOST_0_HOST_NAME=https://example.test",
 	})
 	if err != nil {
 		t.Fatalf("parse remote hosts: %v", err)
@@ -136,19 +137,135 @@ func TestRemoteHostsFromEnvDefaultsToFirstHost(t *testing.T) {
 	}
 }
 
-func TestRemoteHostsFromEnvRequiresNameAndURL(t *testing.T) {
-	_, err := remoteHostsFromValues([]string{"REMOTE_HOST_0_NAME=lab"})
+func TestRemoteHostsFromEnvRequiresDisplayNameAndHostName(t *testing.T) {
+	_, err := remoteHostsFromValues([]string{"REMOTE_HOST_0_DISPLAY_NAME=lab"})
 	if err == nil {
-		t.Fatal("expected missing URL error")
+		t.Fatal("expected missing host name error")
 	}
 }
 
 func TestRemoteHostsFromEnvRequiresContiguousIndexes(t *testing.T) {
 	_, err := remoteHostsFromValues([]string{
-		"REMOTE_HOST_1_NAME=stage",
-		"REMOTE_HOST_1_URL=https://example.test/api/gpus",
+		"REMOTE_HOST_1_DISPLAY_NAME=stage",
+		"REMOTE_HOST_1_HOST_NAME=https://example.test",
 	})
 	if err == nil {
 		t.Fatal("expected contiguous indexes error")
+	}
+}
+
+func TestRemoteHostsFromEnvRejectsPathInHostName(t *testing.T) {
+	_, err := remoteHostsFromValues([]string{
+		"REMOTE_HOST_0_DISPLAY_NAME=lab",
+		"REMOTE_HOST_0_HOST_NAME=https://example.test/api/gpus",
+	})
+	if err == nil {
+		t.Fatal("expected path in host name error")
+	}
+}
+
+func TestRemoteHostsFromEnvRequiresPathPrefix(t *testing.T) {
+	_, err := remoteHostsFromValues([]string{
+		"REMOTE_HOST_0_DISPLAY_NAME=lab",
+		"REMOTE_HOST_0_HOST_NAME=https://example.test",
+		"REMOTE_HOST_0_PATH=api/gpus",
+	})
+	if err == nil {
+		t.Fatal("expected invalid path error")
+	}
+}
+
+func TestNormalizeRemoteHostURL(t *testing.T) {
+	tests := []struct {
+		name         string
+		hostName     string
+		endpointPath string
+		want         string
+		wantErr      bool
+	}{
+		{
+			name:         "adds default https scheme",
+			hostName:     "example.test",
+			endpointPath: "/api/gpus",
+			want:         "https://example.test/api/gpus",
+		},
+		{
+			name:         "keeps http scheme and port",
+			hostName:     "http://127.0.0.1:9090",
+			endpointPath: "/api/gpus",
+			want:         "http://127.0.0.1:9090/api/gpus",
+		},
+		{
+			name:         "trims host name",
+			hostName:     " https://example.test ",
+			endpointPath: "/api/gpus",
+			want:         "https://example.test/api/gpus",
+		},
+		{
+			name:         "allows root path in host name",
+			hostName:     "https://example.test/",
+			endpointPath: "/api/gpus",
+			want:         "https://example.test/api/gpus",
+		},
+		{
+			name:         "uses custom endpoint path",
+			hostName:     "https://example.test",
+			endpointPath: "/api/custom-gpus",
+			want:         "https://example.test/api/custom-gpus",
+		},
+		{
+			name:         "rejects empty host name",
+			hostName:     "",
+			endpointPath: "/api/gpus",
+			wantErr:      true,
+		},
+		{
+			name:         "rejects unsupported scheme",
+			hostName:     "ftp://example.test",
+			endpointPath: "/api/gpus",
+			wantErr:      true,
+		},
+		{
+			name:         "rejects missing host",
+			hostName:     "https:///example.test",
+			endpointPath: "/api/gpus",
+			wantErr:      true,
+		},
+		{
+			name:         "rejects path in host name",
+			hostName:     "https://example.test/api/gpus",
+			endpointPath: "/api/gpus",
+			wantErr:      true,
+		},
+		{
+			name:         "rejects query in host name",
+			hostName:     "https://example.test?token=abc",
+			endpointPath: "/api/gpus",
+			wantErr:      true,
+		},
+		{
+			name:         "rejects fragment in host name",
+			hostName:     "https://example.test#gpu",
+			endpointPath: "/api/gpus",
+			wantErr:      true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := normalizeRemoteHostURL(test.hostName, test.endpointPath)
+			if test.wantErr {
+				if err == nil {
+					t.Fatal("expected error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("expected no error, got %v", err)
+			}
+			if got != test.want {
+				t.Fatalf("expected %q, got %q", test.want, got)
+			}
+		})
 	}
 }

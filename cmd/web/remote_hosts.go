@@ -12,14 +12,16 @@ import (
 )
 
 const remoteHostEnvPrefix = "REMOTE_HOST_"
+const defaultRemoteHostPath = "/api/gpus"
 
 type remoteHostEnv struct {
-	name       string
-	url        string
-	isDefault  bool
-	seenName   bool
-	seenURL    bool
-	seenConfig bool
+	displayName     string
+	hostName        string
+	path            string
+	isDefault       bool
+	seenDisplayName bool
+	seenHostName    bool
+	seenConfig      bool
 }
 
 func remoteHostsFromEnv() ([]webapp.RemoteHost, error) {
@@ -47,12 +49,14 @@ func remoteHostsFromValues(environ []string) ([]webapp.RemoteHost, error) {
 		config.seenConfig = true
 
 		switch field {
-		case "NAME":
-			config.name = strings.TrimSpace(value)
-			config.seenName = true
-		case "URL":
-			config.url = strings.TrimSpace(value)
-			config.seenURL = true
+		case "DISPLAY_NAME":
+			config.displayName = strings.TrimSpace(value)
+			config.seenDisplayName = true
+		case "HOST_NAME":
+			config.hostName = strings.TrimSpace(value)
+			config.seenHostName = true
+		case "PATH":
+			config.path = strings.TrimSpace(value)
 		case "DEFAULT":
 			config.isDefault = truthy(value)
 		}
@@ -79,16 +83,21 @@ func remoteHostsFromValues(environ []string) ([]webapp.RemoteHost, error) {
 		if !config.seenConfig {
 			continue
 		}
-		if !config.seenName || config.name == "" {
-			return nil, fmt.Errorf("REMOTE_HOST_%d_NAME is required", index)
+		if !config.seenDisplayName || config.displayName == "" {
+			return nil, fmt.Errorf("REMOTE_HOST_%d_DISPLAY_NAME is required", index)
 		}
-		if !config.seenURL || config.url == "" {
-			return nil, fmt.Errorf("REMOTE_HOST_%d_URL is required", index)
+		if !config.seenHostName || config.hostName == "" {
+			return nil, fmt.Errorf("REMOTE_HOST_%d_HOST_NAME is required", index)
 		}
 
-		hostURL, err := normalizeRemoteHostURL(config.url)
+		hostPath, err := normalizeRemoteHostPath(config.path)
 		if err != nil {
-			return nil, fmt.Errorf("REMOTE_HOST_%d_URL: %w", index, err)
+			return nil, fmt.Errorf("REMOTE_HOST_%d_PATH: %w", index, err)
+		}
+
+		hostURL, err := normalizeRemoteHostURL(config.hostName, hostPath)
+		if err != nil {
+			return nil, fmt.Errorf("REMOTE_HOST_%d_HOST_NAME: %w", index, err)
 		}
 		if config.isDefault {
 			if defaultIndex >= 0 {
@@ -98,7 +107,7 @@ func remoteHostsFromValues(environ []string) ([]webapp.RemoteHost, error) {
 		}
 
 		hosts = append(hosts, webapp.RemoteHost{
-			Name:    config.name,
+			Name:    config.displayName,
 			URL:     hostURL,
 			Default: config.isDefault,
 		})
@@ -126,8 +135,8 @@ func splitRemoteHostKey(key string) (int, string, bool) {
 	return index, field, true
 }
 
-func normalizeRemoteHostURL(value string) (string, error) {
-	text := strings.TrimSpace(value)
+func normalizeRemoteHostURL(hostName string, endpointPath string) (string, error) {
+	text := strings.TrimSpace(hostName)
 	if text == "" {
 		return "", fmt.Errorf("must not be empty")
 	}
@@ -145,8 +154,39 @@ func normalizeRemoteHostURL(value string) (string, error) {
 	if parsed.Host == "" {
 		return "", fmt.Errorf("must include a host")
 	}
+	if parsed.Path != "" && parsed.Path != "/" {
+		return "", fmt.Errorf("must not include a path; use REMOTE_HOST_*_PATH")
+	}
+	if parsed.RawQuery != "" || parsed.Fragment != "" {
+		return "", fmt.Errorf("must not include query or fragment")
+	}
+
+	parsed.Path = endpointPath
 
 	return parsed.String(), nil
+}
+
+func normalizeRemoteHostPath(path string) (string, error) {
+	endpointPath := strings.TrimSpace(path)
+	if endpointPath == "" {
+		endpointPath = defaultRemoteHostPath
+	}
+	if !strings.HasPrefix(endpointPath, "/") {
+		return "", fmt.Errorf("path must start with /")
+	}
+	if strings.ContainsAny(endpointPath, "?#") {
+		return "", fmt.Errorf("path must not include query or fragment")
+	}
+
+	parsedPath, err := url.Parse(endpointPath)
+	if err != nil {
+		return "", fmt.Errorf("invalid path: %w", err)
+	}
+	if parsedPath.IsAbs() || parsedPath.Host != "" {
+		return "", fmt.Errorf("path must be relative to the host")
+	}
+
+	return parsedPath.Path, nil
 }
 
 func truthy(value string) bool {

@@ -121,12 +121,20 @@ nvidia-smi-web-ui web --addr :8080
 By default, the web UI reads GPU data from the same process that serves the dashboard. To use one dashboard as a shared entry point for several existing `nvidia-smi-web-ui` servers, configure remote hosts with indexed environment variables:
 
 ```bash
-REMOTE_HOST_0_NAME="test"
-REMOTE_HOST_0_URL="nvidia-web-ui-rnd-kube.examoke.com/api/gpus"
+REMOTE_HOST_0_DISPLAY_NAME="test"
+REMOTE_HOST_0_HOST_NAME="nvidia-web-ui-rnd-kube.examoke.com"
 REMOTE_HOST_0_DEFAULT="true"
 ```
 
-Add more hosts by incrementing the index: `REMOTE_HOST_1_NAME`, `REMOTE_HOST_1_URL`, and so on. Indexes must start at `0` and be contiguous because the UI stores the selected host as `host=N` in the URL. `REMOTE_HOST_*_NAME` is displayed in the UI host selector. `REMOTE_HOST_*_URL` must point to the remote server GPU API endpoint, usually `/api/gpus`. URLs without a scheme default to `https://`.
+Add more hosts by incrementing the index: `REMOTE_HOST_1_DISPLAY_NAME`, `REMOTE_HOST_1_HOST_NAME`, and so on. Indexes must start at `0` and be contiguous because the UI stores the selected host as `host=N` in the URL. `REMOTE_HOST_*_DISPLAY_NAME` is displayed in the UI host selector. `REMOTE_HOST_*_HOST_NAME` must point to the remote server origin without a path, for example `http://nvidia-web-ui-gpu-1080-ti-main:8080`. Host names without a scheme default to `https://`.
+
+`REMOTE_HOST_*_PATH` is optional and defaults to `/api/gpus`:
+
+```bash
+REMOTE_HOST_1_DISPLAY_NAME="1080 Ti"
+REMOTE_HOST_1_HOST_NAME="http://nvidia-web-ui-gpu-1080-ti-${DEPLOY_BRANCH}:8080"
+REMOTE_HOST_1_PATH="/api/gpus"
+```
 
 When at least one `REMOTE_HOST_*` entry is configured, the local NVML provider is disabled for the web command. The local process only serves the dashboard and proxies `/api/gpus?host=N` to the selected remote host. The local host is not added to the selector automatically.
 
