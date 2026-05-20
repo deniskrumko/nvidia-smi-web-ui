@@ -143,22 +143,14 @@ func (renderer *renderer) health(response http.ResponseWriter, request *http.Req
 
 func (renderer *renderer) gpus(response http.ResponseWriter, request *http.Request) {
 	if len(renderer.hosts) > 0 {
-		hostIndex, err := renderer.requestedHostIndex(request)
-		if err != nil {
-			utils.WriteJSONError(response, request, http.StatusBadRequest, err.Error())
-			return
-		}
-
-		payload, status, err := renderer.remoteGPUs(request.Context(), hostIndex)
-		if err != nil {
-			utils.WriteJSONError(response, request, status, err.Error())
-			return
-		}
-
-		utils.WriteJSON(response, http.StatusOK, payload)
+		renderer.remoteHostGPUs(response, request)
 		return
 	}
 
+	renderer.localGPUs(response, request)
+}
+
+func (renderer *renderer) localGPUs(response http.ResponseWriter, request *http.Request) {
 	if renderer.provider == nil {
 		utils.WriteJSONError(response, request, http.StatusServiceUnavailable, "GPU provider is not configured")
 		return
@@ -176,10 +168,26 @@ func (renderer *renderer) gpus(response http.ResponseWriter, request *http.Reque
 	})
 }
 
+func (renderer *renderer) remoteHostGPUs(response http.ResponseWriter, request *http.Request) {
+	hostIndex, err := renderer.requestedHostIndex(request)
+	if err != nil {
+		utils.WriteJSONError(response, request, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	payload, status, err := renderer.remoteGPUs(request.Context(), hostIndex)
+	if err != nil {
+		utils.WriteJSONError(response, request, status, err.Error())
+		return
+	}
+
+	utils.WriteJSON(response, http.StatusOK, payload)
+}
+
 func (renderer *renderer) requestedHostIndex(request *http.Request) (int, error) {
 	value := strings.TrimSpace(request.URL.Query().Get("host"))
 	if value == "" {
-		return renderer.defaultHostIndex(), nil
+		return 0, fmt.Errorf("multi-host mode is enabled, specify a concrete host with the host query parameter")
 	}
 
 	index, err := strconv.Atoi(value)

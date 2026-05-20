@@ -386,6 +386,25 @@ func TestGPUAPIProxiesConfiguredRemoteHost(t *testing.T) {
 	}
 }
 
+func TestGPUAPIReturnsBadRequestForMissingRemoteHost(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "/api/gpus", nil)
+	response := httptest.NewRecorder()
+
+	webui.NewHandler(webui.Config{
+		SnapshotProvider: &fakeProvider{err: errors.New("local provider must not be used")},
+		RemoteHosts: []webui.RemoteHost{
+			{Name: "test", URL: "https://example.test/api/gpus", Default: true},
+		},
+	}).ServeHTTP(response, request)
+
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, response.Code)
+	}
+	if body := response.Body.String(); !strings.Contains(body, "multi-host mode is enabled") {
+		t.Fatalf("expected missing host error, got %q", body)
+	}
+}
+
 func TestGPUAPIReturnsBadRequestForUnknownRemoteHost(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/api/gpus?host=3", nil)
 	response := httptest.NewRecorder()
