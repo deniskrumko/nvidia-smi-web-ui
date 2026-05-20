@@ -40,31 +40,40 @@
 
     <div class="topbar-spacer"></div>
 
-    <div class="dropdown time-selector" data-dropdown="time">
-      <label class="time-input-label">
-        <span>Time window:</span>
-        <input type="number" min="1" step="1" value="5" data-time-minutes aria-label="Time window in minutes">
-        <span>min</span>
-      </label>
-      <div class="dropdown-panel time-panel" data-time-panel>
-        <button type="button" data-time-preset="5">5 min</button>
-        <button type="button" data-time-preset="15">15 min</button>
-        <button type="button" data-time-preset="60">1 hour</button>
-      </div>
-    </div>
+    <div class="control-section" aria-live="polite">
+      <span class="status-indicator">
+        <button class="status-dot" type="button" data-status-dot aria-label="Starting" aria-describedby="status-tooltip"></button>
+        <span class="status-tooltip" id="status-tooltip" role="tooltip" data-status-tooltip>Starting</span>
+      </span>
 
-    <div class="refresh-section" aria-live="polite">
-      <span class="status-dot" data-status-dot></span>
-      <span class="last-update" data-status-label>Starting</span>
-      <select data-refresh-interval aria-label="Refresh interval">
-        <optgroup label="Auto-refresh">
-          <option value="0">Off</option>
-          <option value="1000" selected>1 sec</option>
-          <option value="5000">5 sec</option>
-          <option value="60000">1 min</option>
-          <option value="300000">5 min</option>
-        </optgroup>
-      </select>
+      <div class="dropdown time-selector" data-dropdown="time">
+        <label class="control-input-label time-input-label">
+          <span>Window:</span>
+          <input type="number" min="1" step="1" value="5" data-time-minutes aria-label="Time window in minutes">
+          <span>min</span>
+        </label>
+        <div class="dropdown-panel time-panel" data-time-panel>
+          <button type="button" data-time-preset="5">5 min</button>
+          <button type="button" data-time-preset="15">15 min</button>
+          <button type="button" data-time-preset="60">1 hour</button>
+        </div>
+      </div>
+
+      <div class="dropdown refresh-selector" data-dropdown="refresh">
+        <label class="control-input-label refresh-input-label">
+          <span>Refresh:</span>
+          <input type="number" min="0" step="1" value="1" data-refresh-interval aria-label="Refresh interval in seconds">
+          <span>sec</span>
+        </label>
+        <div class="dropdown-panel refresh-panel" data-refresh-panel>
+          <button type="button" data-refresh-preset="0">Off</button>
+          <button type="button" data-refresh-preset="1">1 sec</button>
+          <button type="button" data-refresh-preset="5">5 sec</button>
+          <button type="button" data-refresh-preset="60">1 min</button>
+          <button type="button" data-refresh-preset="300">5 min</button>
+        </div>
+      </div>
+
       <button class="primary-action" type="button" data-refresh-now>Refresh</button>
     </div>
   </header>

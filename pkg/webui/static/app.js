@@ -65,12 +65,15 @@
     },
   ];
 
-  const defaultChartIds = ["memory", "gpu-util", "mem-util", "temp"];
+  const summaryChartID = "summary";
+  const chartOptions = [{ id: summaryChartID, title: "Summary" }, ...metrics];
+  const defaultChartIds = [summaryChartID, "memory", "gpu-util", "mem-util", "temp"];
   const colors = ["#1f6fdb", "#dc5f00", "#179a63", "#8b5cf6", "#c2415d", "#0f8b8d", "#6d7d00", "#9b4d96"];
   const aggregateChartWindow = 60 * 60 * 1000;
   const minPixelsPerChartPoint = 3;
   const chartMap = new Map(metrics.map((metric) => [metric.id, metric]));
-  const chartParamMap = new Map(metrics.map((metric, index) => [metric.id, String(index + 1)]));
+  const chartOptionMap = new Map(chartOptions.map((option) => [option.id, option]));
+  const chartParamMap = new Map(chartOptions.map((option, index) => [option.id, String(index)]));
 
   const dom = {
     appShell: document.querySelector("[data-branding]"),
@@ -79,6 +82,7 @@
     gpuDropdown: document.querySelector('[data-dropdown="gpu"]'),
     chartDropdown: document.querySelector('[data-dropdown="charts"]'),
     timeDropdown: document.querySelector('[data-dropdown="time"]'),
+    refreshDropdown: document.querySelector('[data-dropdown="refresh"]'),
     gpuTrigger: document.querySelector("[data-gpu-trigger]"),
     gpuSummary: document.querySelector("[data-gpu-summary]"),
     chartTrigger: document.querySelector("[data-chart-trigger]"),
@@ -86,7 +90,7 @@
     chartList: document.querySelector("[data-chart-list]"),
     timeMinutes: document.querySelector("[data-time-minutes]"),
     statusDot: document.querySelector("[data-status-dot]"),
-    statusLabel: document.querySelector("[data-status-label]"),
+    statusTooltip: document.querySelector("[data-status-tooltip]"),
     deviceList: document.querySelector("[data-device-list]"),
     selectAll: document.querySelector("[data-select-all]"),
     clearAll: document.querySelector("[data-clear-all]"),
@@ -96,7 +100,9 @@
     refreshInterval: document.querySelector("[data-refresh-interval]"),
     refreshNow: document.querySelector("[data-refresh-now]"),
     timeInputLabel: document.querySelector(".time-input-label"),
+    refreshInputLabel: document.querySelector(".refresh-input-label"),
     timePresets: [...document.querySelectorAll("[data-time-preset]")],
+    refreshPresets: [...document.querySelectorAll("[data-refresh-preset]")],
     summary: document.querySelector("[data-summary]"),
     charts: document.querySelector("[data-charts]"),
   };
@@ -124,6 +130,9 @@
     requestID: 0,
     lastUpdate: null,
   };
+  if (state.focusedChart === summaryChartID) {
+    state.focusedChart = null;
+  }
   if (state.focusedChart && !state.selectedChartIds.has(state.focusedChart)) {
     state.focusedChart = null;
   }
@@ -167,6 +176,25 @@
         closeDropdowns();
       }
     });
+    dom.refreshInputLabel.addEventListener("click", () => focusRefreshInput());
+    dom.refreshInterval.addEventListener("focus", () => openDropdown(dom.refreshDropdown, false));
+    dom.refreshInterval.addEventListener("change", applyRefreshInput);
+    dom.refreshInterval.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        applyRefreshInput();
+        dom.refreshInterval.blur();
+        closeDropdowns();
+      }
+    });
+    dom.statusDot.addEventListener("mouseenter", updateStatusTooltipPosition);
+    dom.statusDot.addEventListener("mousemove", updateStatusTooltipPosition);
+    dom.statusDot.addEventListener("focus", () => {
+      const rect = dom.statusDot.getBoundingClientRect();
+      updateStatusTooltipPosition({
+        clientX: rect.left + rect.width / 2,
+        clientY: rect.bottom,
+      });
+    });
 
     document.addEventListener("click", (event) => {
       if (dom.dropdowns.some((dropdown) => dropdown.contains(event.target))) return;
@@ -194,7 +222,7 @@
     });
 
     dom.chartSelectAll.addEventListener("click", () => {
-      state.selectedChartIds = new Set(metrics.map((metric) => metric.id));
+      state.selectedChartIds = new Set(chartOptions.map((option) => option.id));
       updateURL();
       renderChartSelector();
       renderChartShells();
@@ -210,18 +238,20 @@
       renderAll();
     });
 
-    dom.refreshInterval.addEventListener("change", () => {
-      state.refreshInterval = Number(dom.refreshInterval.value);
-      scheduleRefresh();
-      updateStatus();
-    });
-
     dom.timePresets.forEach((button) => {
       button.addEventListener("click", () => {
         const minutes = Number(button.dataset.timePreset);
         setTimeWindowMinutes(minutes);
         closeDropdowns();
         renderAll();
+      });
+    });
+
+    dom.refreshPresets.forEach((button) => {
+      button.addEventListener("click", () => {
+        const seconds = Number(button.dataset.refreshPreset);
+        setRefreshIntervalSeconds(seconds);
+        closeDropdowns();
       });
     });
 
@@ -232,6 +262,7 @@
     dom.charts.innerHTML = "";
     charts.clear();
     dom.appShell.classList.toggle("is-chart-focused", Boolean(state.focusedChart));
+    dom.appShell.classList.toggle("is-summary-hidden", !state.selectedChartIds.has(summaryChartID));
     const selectedMetrics = metrics.filter((metric) => {
       if (!state.selectedChartIds.has(metric.id)) return false;
       return !state.focusedChart || state.focusedChart === metric.id;
@@ -239,7 +270,7 @@
     dom.charts.style.setProperty("--chart-rows", String(Math.max(1, Math.ceil(selectedMetrics.length / 2))));
     dom.charts.dataset.count = String(selectedMetrics.length);
     if (selectedMetrics.length === 0) {
-      dom.charts.innerHTML = '<div class="empty-charts">No charts selected</div>';
+      dom.charts.innerHTML = '<div class="empty-charts">Select required charts in navigation bar</div>';
       return;
     }
 
@@ -397,18 +428,18 @@
 
   function renderChartSelector() {
     dom.chartList.innerHTML = "";
-    for (const metric of metrics) {
+    for (const option of chartOptions) {
       const label = document.createElement("label");
       label.className = "chart-option";
 
       const input = document.createElement("input");
       input.type = "checkbox";
-      input.checked = state.selectedChartIds.has(metric.id);
+      input.checked = state.selectedChartIds.has(option.id);
       input.addEventListener("change", () => {
         if (input.checked) {
-          state.selectedChartIds.add(metric.id);
+          state.selectedChartIds.add(option.id);
         } else {
-          state.selectedChartIds.delete(metric.id);
+          state.selectedChartIds.delete(option.id);
         }
         if (state.focusedChart && !state.selectedChartIds.has(state.focusedChart)) {
           state.focusedChart = null;
@@ -419,7 +450,7 @@
       });
 
       const text = document.createElement("span");
-      text.textContent = metric.title;
+      text.textContent = option.title;
       label.append(input, text);
       dom.chartList.appendChild(label);
     }
@@ -487,7 +518,7 @@
     dom.gpuSummary.innerHTML = "";
     const wrap = document.createElement("span");
     wrap.className = "gpu-summary";
-    for (const device of selectedDevices()) {
+    for (const device of selectedDevices().slice(0, 3)) {
       const badge = document.createElement("span");
       badge.className = "gpu-mini-badge";
       badge.style.background = device.color;
@@ -500,8 +531,8 @@
 
   function renderChartSummary() {
     const count = state.selectedChartIds.size;
-    if (count === metrics.length) {
-      dom.chartSummary.textContent = `All charts (${metrics.length})`;
+    if (count === chartOptions.length) {
+      dom.chartSummary.textContent = `All charts (${chartOptions.length})`;
       return;
     }
     if (isDefaultChartSelection()) {
@@ -516,6 +547,11 @@
   }
 
   function renderSummary() {
+    if (!state.selectedChartIds.has(summaryChartID) || state.focusedChart) {
+      dom.summary.innerHTML = "";
+      return;
+    }
+
     const latest = state.samples[state.samples.length - 1];
     if (!latest) {
       dom.summary.innerHTML = "";
@@ -523,11 +559,14 @@
     }
 
     dom.summary.innerHTML = "";
-    for (const deviceInfo of selectedDevices()) {
+    for (const deviceInfo of state.devices.values()) {
       const device = latest.devices.get(deviceInfo.id);
       if (!device) continue;
+      const isActive = state.selectedIds.has(deviceInfo.id);
       const card = document.createElement("article");
-      card.className = "summary-card";
+      card.className = `summary-card${isActive ? "" : " is-inactive"}`;
+      card.setAttribute("role", "button");
+      card.setAttribute("aria-pressed", isActive ? "true" : "false");
       card.tabIndex = 0;
       card.innerHTML = `
         <p class="summary-title" title="${escapeHTML(deviceInfo.label)}">
@@ -815,7 +854,7 @@
       next.delete("charts");
     } else if (selectedChartIds().length === 0) {
       next.set("charts", "none");
-    } else if (selectedChartIds().length === metrics.length) {
+    } else if (selectedChartIds().length === chartOptions.length) {
       next.set("charts", "all");
     } else {
       next.set("charts", selectedChartIds().map(chartIDToParam).join(","));
@@ -1041,18 +1080,18 @@
   function parseChartParam(value) {
     if (value === null || value === "") return null;
     if (value === "none") return [];
-    if (value === "all") return metrics.map((metric) => metric.id);
-    const parts = value.includes(",") ? value.split(",") : chartMap.has(value) ? [value] : value.split("");
+    if (value === "all") return chartOptions.map((option) => option.id);
+    const parts = value.includes(",") ? value.split(",") : chartOptionMap.has(value) ? [value] : value.split("");
     const ids = parts.map(parseChartIDParam).filter(Boolean);
     return [...new Set(ids)];
   }
 
   function parseChartIDParam(value) {
     if (!value) return null;
-    if (chartMap.has(value)) return value;
+    if (chartOptionMap.has(value)) return value;
     const index = Number(value);
-    if (Number.isInteger(index) && index >= 1 && index <= metrics.length) {
-      return metrics[index - 1].id;
+    if (Number.isInteger(index) && index >= 0 && index < chartOptions.length) {
+      return chartOptions[index].id;
     }
     return null;
   }
@@ -1096,7 +1135,7 @@
   }
 
   function selectedChartIds() {
-    return metrics.map((metric) => metric.id).filter((id) => state.selectedChartIds.has(id));
+    return chartOptions.map((option) => option.id).filter((id) => state.selectedChartIds.has(id));
   }
 
   function isDefaultChartSelection() {
@@ -1113,6 +1152,18 @@
 
   function applyTimeInput() {
     setTimeWindowMinutes(dom.timeMinutes.value);
+  }
+
+  function setRefreshIntervalSeconds(seconds) {
+    const nextSeconds = Math.max(0, Math.round(Number(seconds) || 0));
+    state.refreshInterval = nextSeconds * 1000;
+    dom.refreshInterval.value = String(nextSeconds);
+    scheduleRefresh();
+    updateStatus();
+  }
+
+  function applyRefreshInput() {
+    setRefreshIntervalSeconds(dom.refreshInterval.value);
   }
 
   function toggleDropdown(dropdown) {
@@ -1136,6 +1187,12 @@
     dom.timeMinutes.select();
   }
 
+  function focusRefreshInput() {
+    openDropdown(dom.refreshDropdown);
+    dom.refreshInterval.focus();
+    dom.refreshInterval.select();
+  }
+
   function closeDropdowns() {
     for (const dropdown of dom.dropdowns) {
       dropdown.classList.remove("is-open");
@@ -1148,7 +1205,22 @@
     const statusKind = kind || (state.refreshInterval > 0 ? "ok" : "warn");
     const statusText = text || statusLabelText();
     dom.statusDot.className = `status-dot is-${statusKind}`;
-    dom.statusLabel.textContent = statusText;
+    dom.statusDot.setAttribute("aria-label", statusText);
+    dom.statusTooltip.textContent = statusText;
+  }
+
+  function updateStatusTooltipPosition(event) {
+    const margin = 10;
+    const offset = 16;
+    const width = dom.statusTooltip.offsetWidth || 160;
+    const height = dom.statusTooltip.offsetHeight || 32;
+    const x = Math.min(Math.max(event.clientX, width / 2 + margin), window.innerWidth - width / 2 - margin);
+    let y = event.clientY + offset;
+    if (y + height + margin > window.innerHeight) {
+      y = event.clientY - height - offset;
+    }
+    dom.statusTooltip.style.setProperty("--status-tooltip-x", `${x}px`);
+    dom.statusTooltip.style.setProperty("--status-tooltip-y", `${y}px`);
   }
 
   function statusLabelText() {
