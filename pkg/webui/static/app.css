@@ -1,8 +1,8 @@
 :root {
   --ui-border-color: #d9e1eb;
-  --ui-border-color-hover: #bcccdf;
+  --ui-border-color-hover: #adbbcc;
   --accent-color: #c6e90d;
-  --ui-background-hover: #f8f9fd;
+  --ui-background-hover: #f9f9f9;
   --ui-border: 1px solid var(--ui-border-color);
   --topbar-control-height: 42px;
   color-scheme: light;
@@ -457,7 +457,7 @@ select {
 
 .status-indicator {
   align-items: center;
-  display: inline-flex;
+  display: none;
   flex: 0 0 auto;
   margin-left: 6px;
   position: relative;
@@ -545,12 +545,17 @@ select {
 }
 
 .primary-action {
+  align-items: center;
   background: #1f6fdb;
   border: 0;
   border-radius: 0 7px 7px 0;
   color: #ffffff;
+  display: inline-flex;
+  font-weight: 750;
+  justify-content: center;
   align-self: stretch;
   height: 100%;
+  line-height: 1;
   min-height: 0;
   padding: 0 14px;
   white-space: nowrap;
@@ -596,7 +601,7 @@ select {
 
 .summary-card.is-inactive:hover,
 .summary-card.is-inactive:focus-visible {
-  opacity: 0.72;
+  opacity: 0.9;
 }
 
 .summary-title {
@@ -817,11 +822,15 @@ canvas {
   .app-shell {
     height: auto;
     min-height: 100vh;
+    padding: 8px;
   }
 
   .topbar {
     align-items: stretch;
     flex-direction: column;
+    gap: 8px;
+    min-height: 0;
+    padding: 10px;
     position: static;
   }
 
@@ -833,15 +842,17 @@ canvas {
     width: 100%;
   }
 
+  .host-control,
+  .host-select-label,
   .gpu-selector,
   .gpu-trigger {
-    max-width: 220px;
-    min-width: 220px;
-    width: 220px;
+    max-width: none;
+    min-width: 0;
+    width: 100%;
   }
 
   .gpu-selector {
-    flex-basis: 220px;
+    flex-basis: auto;
   }
 
   .dropdown-panel,
@@ -856,14 +867,16 @@ canvas {
 
   .control-section {
     align-items: stretch;
-    flex-direction: column;
-    gap: 4px;
+    display: grid;
+    gap: 6px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     height: auto;
-    padding: 5px 6px;
+    padding: 6px;
   }
 
   .control-input-label {
     height: var(--topbar-control-height);
+    justify-content: center;
     width: 100%;
   }
 
@@ -871,20 +884,16 @@ canvas {
     flex-wrap: wrap;
   }
 
-  .host-control {
-    max-width: 400px;
-    min-width: 220px;
-    width: fit-content;
-  }
-
   .primary-action {
     border-radius: 7px;
+    grid-column: 1 / -1;
     height: var(--topbar-control-height);
+    min-height: var(--topbar-control-height);
     width: 100%;
   }
 
   .status-indicator {
-    margin: 8px 4px;
+    display: none;
   }
 
   .summary,
