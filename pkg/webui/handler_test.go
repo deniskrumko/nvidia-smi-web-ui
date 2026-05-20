@@ -85,6 +85,20 @@ func TestNewHandlerRendersRemoteHostsConfig(t *testing.T) {
 	if !strings.Contains(body, `data-hosts="[{&#34;index&#34;:0,&#34;name&#34;:&#34;test&#34;,&#34;default&#34;:true}]"`) {
 		t.Fatalf("expected remote host config, got %q", body)
 	}
+	if !strings.Contains(body, `data-host-control`) {
+		t.Fatalf("expected remote host control, got %q", body)
+	}
+}
+
+func TestNewHandlerOmitsHostControlWithoutRemoteHosts(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	response := httptest.NewRecorder()
+
+	webui.NewHandler(webui.Config{}).ServeHTTP(response, request)
+
+	if body := response.Body.String(); strings.Contains(body, `data-host-control`) {
+		t.Fatalf("expected no host control, got %q", body)
+	}
 }
 
 func TestNewHandlerReadsVersionFile(t *testing.T) {

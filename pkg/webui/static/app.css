@@ -1,5 +1,8 @@
 :root {
   --ui-border-color: #d9e1eb;
+  --ui-border-color-hover: #bcccdf;
+  --accent-color: #c6e90d;
+  --ui-background-hover: #f8f9fd;
   --ui-border: 1px solid var(--ui-border-color);
   --topbar-control-height: 49px;
   color-scheme: light;
@@ -477,7 +480,8 @@ select {
 
 .summary-card:hover,
 .summary-card:focus-visible {
-  border-color: var(--ui-border-color);
+  background-color: var(--ui-background-hover);
+  border-color: var(--ui-border-color-hover);
   outline: none;
 }
 

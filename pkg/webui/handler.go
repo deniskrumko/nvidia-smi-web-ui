@@ -99,6 +99,7 @@ type pageData struct {
 	Branding  string
 	Version   string
 	HostsJSON string
+	HasHosts  bool
 }
 
 type gpuResponse struct {
@@ -128,6 +129,7 @@ func (renderer *renderer) index(response http.ResponseWriter, request *http.Requ
 		Branding:  renderer.branding,
 		Version:   renderer.version,
 		HostsJSON: renderer.hostsJSON(),
+		HasHosts:  len(renderer.hosts) > 0,
 	}
 
 	response.Header().Set("Content-Type", "text/html; charset=utf-8")

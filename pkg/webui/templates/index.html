@@ -6,7 +6,9 @@
       <h1>{{.Branding}}</h1>
     </a>
 
+    {{if .HasHosts}}
     <div class="host-control" data-host-control></div>
+    {{end}}
 
     <div class="dropdown gpu-selector" data-dropdown="gpu">
       <button class="dropdown-trigger gpu-trigger" type="button" data-gpu-trigger aria-expanded="false">
