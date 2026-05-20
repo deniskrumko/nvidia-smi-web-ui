@@ -6,6 +6,8 @@
       <h1>{{.Branding}}</h1>
     </a>
 
+    <div class="host-control" data-host-control></div>
+
     <div class="dropdown gpu-selector" data-dropdown="gpu">
       <button class="dropdown-trigger gpu-trigger" type="button" data-gpu-trigger aria-expanded="false">
         <span data-gpu-summary>Waiting for GPUs</span>
@@ -14,7 +16,6 @@
         <div class="dropdown-actions">
           <button type="button" data-select-all>Select all</button>
           <button type="button" data-clear-all>Clear all</button>
-          <div class="host-control" data-host-control></div>
         </div>
         <div class="device-list" data-device-list>
           <span class="muted">Waiting for devices...</span>

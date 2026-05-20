@@ -197,26 +197,54 @@ h1 {
 .host-control {
   align-items: center;
   display: flex;
-  justify-content: flex-end;
-  margin-left: auto;
-  min-width: 180px;
+  flex: 0 0 auto;
+  min-width: 260px;
 }
 
-.host-static,
 .host-select-label {
   align-items: center;
-  color: #405169;
+  background: #f9fbfd;
+  border: var(--ui-border);
+  border-radius: 7px;
+  color: #1f2f46;
   display: inline-flex;
-  font-size: 0.86rem;
-  font-weight: 700;
-  gap: 7px;
+  font-weight: 750;
+  gap: 8px;
+  justify-content: space-between;
+  max-width: 360px;
   min-height: 36px;
+  min-width: 260px;
+  position: relative;
+  width: 100%;
+}
+
+.host-select-label::after {
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 5px solid #53657d;
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  right: 10px;
 }
 
 .host-select-label select {
-  min-height: 34px;
-  min-width: 140px;
-  padding: 5px 28px 5px 9px;
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  font-weight: 750;
+  min-height: 36px;
+  padding: 7px 28px 7px 10px;
+}
+
+.host-select-label select:focus {
+  outline: none;
+}
+
+.host-select-label:focus-within {
+  outline: 2px solid #1f6fdb;
+  outline-offset: 2px;
 }
 
 .device-list {
@@ -656,6 +684,12 @@ canvas {
   }
 }
 
+@media (min-width: 984px) {
+  .summary {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 760px) {
   body {
     overflow: auto;
@@ -698,8 +732,6 @@ canvas {
   }
 
   .host-control {
-    justify-content: flex-start;
-    margin-left: 0;
     min-width: 0;
     width: 100%;
   }

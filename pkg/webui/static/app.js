@@ -104,6 +104,7 @@
   const params = new URLSearchParams(window.location.search);
   const hostOptions = parseHostConfig(dom.appShell ? dom.appShell.dataset.hosts : "[]");
   const defaultHostIndex = defaultHostOption(hostOptions);
+  const basePageTitle = document.title;
   const initialGPUParam = params.get("gpu");
   const initialChartIds = parseChartParam(params.get("charts"));
   const initialFocusedChart = parseChartIDParam(params.get("chart"));
@@ -132,6 +133,7 @@
   tooltip.className = "tooltip";
   document.body.appendChild(tooltip);
 
+  updatePageTitle();
   renderHostControl();
   renderChartShells();
   bindControls();
@@ -433,18 +435,13 @@
     dom.hostControl.innerHTML = "";
 
     if (hostOptions.length === 0) {
-      const label = document.createElement("span");
-      label.className = "host-static";
-      label.textContent = "Host: local";
-      dom.hostControl.appendChild(label);
+      dom.hostControl.hidden = true;
       return;
     }
+    dom.hostControl.hidden = false;
 
     const label = document.createElement("label");
     label.className = "host-select-label";
-
-    const text = document.createElement("span");
-    text.textContent = "Host:";
 
     const select = document.createElement("select");
     select.setAttribute("aria-label", "GPU host");
@@ -457,8 +454,19 @@
     select.value = String(state.hostIndex);
     select.addEventListener("change", () => selectHost(Number(select.value)));
 
-    label.append(text, select);
+    label.append(select);
     dom.hostControl.appendChild(label);
+  }
+
+  function updatePageTitle() {
+    document.title = `${basePageTitle} - ${currentHostName()}`;
+  }
+
+  function currentHostName() {
+    if (hostOptions.length === 0) return "local";
+
+    const selectedHost = hostOptions.find((host) => host.index === state.hostIndex);
+    return selectedHost ? selectedHost.name : "local";
   }
 
   function renderGPUSummary() {
@@ -827,6 +835,7 @@
     state.hoverTime = null;
     tooltip.classList.remove("is-visible");
     closeDropdowns();
+    updatePageTitle();
     renderHostControl();
     updateURL();
     renderChartSelector();
@@ -846,6 +855,7 @@
     clearHostData();
     tooltip.classList.remove("is-visible");
     closeDropdowns();
+    updatePageTitle();
     updateURL();
     renderHostControl();
     renderAll();
