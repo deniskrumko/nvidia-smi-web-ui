@@ -67,6 +67,8 @@
 
   const defaultChartIds = ["memory", "gpu-util", "mem-util", "temp"];
   const colors = ["#1f6fdb", "#dc5f00", "#179a63", "#8b5cf6", "#c2415d", "#0f8b8d", "#6d7d00", "#9b4d96"];
+  const aggregateChartWindow = 60 * 60 * 1000;
+  const minPixelsPerChartPoint = 3;
   const chartMap = new Map(metrics.map((metric) => [metric.id, metric]));
   const chartParamMap = new Map(metrics.map((metric, index) => [metric.id, String(index + 1)]));
 
@@ -655,15 +657,7 @@
   }
 
   function drawSeries(ctx, plot, xRange, yRange, samples, metric, deviceInfo) {
-    const points = samples.map((sample) => {
-      const device = sample.devices.get(deviceInfo.id);
-      const value = device ? metric.value(device) : null;
-      return {
-        x: xScale(sample.time, xRange, plot),
-        y: value === null ? null : yScale(value, yRange, plot),
-        value,
-      };
-    });
+    const points = chartPoints(plot, xRange, yRange, samples, metric, deviceInfo);
 
     ctx.save();
     ctx.strokeStyle = deviceInfo.color;
@@ -687,6 +681,40 @@
     }
     if (drawing) ctx.stroke();
     ctx.restore();
+  }
+
+  function chartPoints(plot, xRange, yRange, samples, metric, deviceInfo) {
+    if (state.timeWindow < aggregateChartWindow) {
+      return samples.map((sample) => samplePoint(sample, plot, xRange, yRange, metric, deviceInfo));
+    }
+
+    return thinnedSamples(plot, xRange, samples).map((sample) => samplePoint(sample, plot, xRange, yRange, metric, deviceInfo));
+  }
+
+  function samplePoint(sample, plot, xRange, yRange, metric, deviceInfo) {
+    const device = sample.devices.get(deviceInfo.id);
+    const value = device ? metric.value(device) : null;
+    return {
+      x: xScale(sample.time, xRange, plot),
+      y: value === null ? null : yScale(value, yRange, plot),
+      value,
+    };
+  }
+
+  function thinnedSamples(plot, xRange, samples) {
+    if (samples.length <= 2) return samples;
+
+    const firstX = xScale(samples[0].time, xRange, plot);
+    const lastX = xScale(samples[samples.length - 1].time, xRange, plot);
+    const averageGap = Math.abs(lastX - firstX) / Math.max(1, samples.length - 1);
+    const step = Math.max(1, Math.ceil(minPixelsPerChartPoint / Math.max(averageGap, 0.01)));
+    if (step === 1) return samples;
+
+    const thinned = [];
+    for (let i = 0; i < samples.length; i += step) {
+      thinned.push(samples[i]);
+    }
+    return thinned;
   }
 
   function drawHover(ctx, plot, xRange, yRange, samples, metric) {
