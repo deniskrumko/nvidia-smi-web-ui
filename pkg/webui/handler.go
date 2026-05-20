@@ -16,7 +16,7 @@ import (
 	"github.com/deniskrumko/nvidia-smi-web-ui/pkg/utils"
 )
 
-const defaultPageTitle = "Nvidia SMI Web UI"
+const defaultPageTitle = "Nvidia SMI"
 const defaultVersion = "local"
 
 // SnapshotProvider provides point-in-time GPU snapshots for the web API.

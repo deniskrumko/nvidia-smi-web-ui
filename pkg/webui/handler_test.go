@@ -123,7 +123,7 @@ func TestNewHandlerUsesDefaultBranding(t *testing.T) {
 
 	webui.NewHandler(webui.Config{}).ServeHTTP(response, request)
 
-	if body := response.Body.String(); !strings.Contains(body, "Nvidia SMI Web UI") {
+	if body := response.Body.String(); !strings.Contains(body, "Nvidia SMI") {
 		t.Fatalf("expected default branding, got %q", body)
 	}
 }

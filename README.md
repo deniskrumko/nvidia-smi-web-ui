@@ -152,8 +152,8 @@ Runtime configuration is provided through environment variables. The image start
 
 | Name | Default | Description |
 | --- | --- | --- |
-| `UI_BRANDING` | `Nvidia SMI Web UI` | Text displayed as the dashboard branding. Also used as the page title when `UI_TITLE` is not set. |
-| `UI_TITLE` | `UI_BRANDING` or `Nvidia SMI Web UI` | Browser page title. |
+| `UI_BRANDING` | `Nvidia SMI` | Text displayed as the dashboard branding. Also used as the page title when `UI_TITLE` is not set. |
+| `UI_TITLE` | `UI_BRANDING` or `Nvidia SMI` | Browser page title. |
 | `DEBUG_MODE_ENABLED` | unset | Enables synthetic GPU data and skips NVML initialization when set to `1`, `true`, or `yes`. |
 | `DEBUG_MODE_GPU_COUNT` | `2` | Number of synthetic GPUs shown in debug mode. Invalid values fall back to the default. |
 | `LOG_ACCESS_LOG_LEVEL` | `info` | Log level used only for JSON HTTP access logs: `debug`, `info`, `warn`, or `error`. |

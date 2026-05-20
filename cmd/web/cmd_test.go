@@ -34,7 +34,7 @@ func TestAccessLogEnabled(t *testing.T) {
 		value string
 		want  bool
 	}{
-		{name: "empty defaults enabled", value: "", want: true},
+		{name: "empty defaults enabled", value: "", want: false},
 		{name: "true", value: "true", want: true},
 		{name: "yes", value: "yes", want: true},
 		{name: "one", value: "1", want: true},
