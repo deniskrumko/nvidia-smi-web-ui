@@ -53,7 +53,7 @@ func New() *cobra.Command {
 }
 
 func run(cmd *cobra.Command, addr string, provider webapp.SnapshotProvider, remoteHosts []webapp.RemoteHost, accessLogLevel slog.Level, suffix string) error {
-	slog.InfoContext(cmd.Context(), "Serving web UI at",
+	slog.InfoContext(cmd.Context(), "Web server started",
 		"url", "http://"+displayAddr(addr),
 		"mode", servingMode(suffix),
 	)
@@ -76,7 +76,7 @@ func debugEnabled() bool {
 func accessLogEnabled() bool {
 	value := strings.TrimSpace(os.Getenv(accessLogEnv))
 	if value == "" {
-		return true
+		return false
 	}
 	return truthy(value)
 }

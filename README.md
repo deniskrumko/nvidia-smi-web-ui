@@ -149,7 +149,7 @@ Runtime configuration is provided through environment variables. The image start
 | `DEBUG_MODE_ENABLED` | unset | Enables synthetic GPU data and skips NVML initialization when set to `1`, `true`, or `yes`. |
 | `DEBUG_MODE_GPU_COUNT` | `2` | Number of synthetic GPUs shown in debug mode. Invalid values fall back to the default. |
 | `LOG_ACCESS_LOG_LEVEL` | `info` | Log level used only for JSON HTTP access logs: `debug`, `info`, `warn`, or `error`. |
-| `LOG_ACCESS_LOG_ENABLED` | `true` | Enables JSON HTTP access logs when set to `1`, `true`, or `yes`. Set to `false` or `0` to disable them. |
+| `LOG_ACCESS_LOG_ENABLED` | `false` | Enables JSON HTTP access logs when set to `1`, `true`, or `yes`. Set to `false` or `0` to disable them. |
 
 Override the HTTP listen address by passing a custom web command:
 

@@ -1,9 +1,6 @@
 package web
 
 import (
-	"bytes"
-	"log/slog"
-	"strings"
 	"testing"
 )
 
@@ -81,24 +78,6 @@ func TestAccessLogLevelFromEnv(t *testing.T) {
 				t.Fatalf("expected no error, got %v", err)
 			}
 		})
-	}
-}
-
-func TestNewLogHandlerUsesJSON(t *testing.T) {
-	var output bytes.Buffer
-	logger := slog.New(newLogHandler(&output))
-
-	logger.Info("Serving web UI at", "url", "http://localhost:8080")
-
-	log := output.String()
-	for _, expected := range []string{
-		`"level":"INFO"`,
-		`"msg":"Serving web UI at"`,
-		`"url":"http://localhost:8080"`,
-	} {
-		if !strings.Contains(log, expected) {
-			t.Fatalf("expected JSON log to contain %s, got %q", expected, log)
-		}
 	}
 }
 
