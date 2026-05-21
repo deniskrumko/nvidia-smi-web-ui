@@ -70,6 +70,7 @@ button {
   gap: 10px;
   min-width: 180px;
   text-decoration: none;
+  margin-right: -10px;
 }
 
 .brand-logo {
@@ -832,6 +833,10 @@ canvas {
     min-height: 0;
     padding: 10px;
     position: static;
+  }
+
+  .brand h1 {
+    font-size: 24px;
   }
 
   .brand,
