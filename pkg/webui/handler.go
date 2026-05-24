@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"io"
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -26,9 +27,10 @@ type SnapshotProvider interface {
 
 // RemoteHost describes a GPU API served by another nvidia-smi-web-ui instance.
 type RemoteHost struct {
-	Name    string
-	URL     string
-	Default bool
+	Name     string
+	HostName string
+	URL      string
+	Default  bool
 }
 
 type httpDoer interface {
@@ -112,9 +114,10 @@ type healthResponse struct {
 }
 
 type hostOption struct {
-	Index   int    `json:"index"`
-	Name    string `json:"name"`
-	Default bool   `json:"default"`
+	Index    int    `json:"index"`
+	Name     string `json:"name"`
+	HostName string `json:"host_name"`
+	Default  bool   `json:"default"`
 }
 
 func (renderer *renderer) index(response http.ResponseWriter, request *http.Request) {
@@ -251,9 +254,10 @@ func (renderer *renderer) hostsJSON() string {
 	options := make([]hostOption, 0, len(renderer.hosts))
 	for index, host := range renderer.hosts {
 		options = append(options, hostOption{
-			Index:   index,
-			Name:    host.Name,
-			Default: host.Default,
+			Index:    index,
+			Name:     host.Name,
+			HostName: remoteHostName(host),
+			Default:  host.Default,
 		})
 	}
 
@@ -262,6 +266,21 @@ func (renderer *renderer) hostsJSON() string {
 		return "[]"
 	}
 	return string(content)
+}
+
+func remoteHostName(host RemoteHost) string {
+	if text := strings.TrimSpace(host.HostName); text != "" {
+		return text
+	}
+
+	parsed, err := url.Parse(host.URL)
+	if err != nil || parsed.Host == "" {
+		return host.URL
+	}
+	if parsed.Scheme == "" {
+		return parsed.Host
+	}
+	return parsed.Scheme + "://" + parsed.Host
 }
 
 func assetDirCandidates(name string) []string {

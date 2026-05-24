@@ -82,7 +82,7 @@ func TestNewHandlerRendersRemoteHostsConfig(t *testing.T) {
 	}).ServeHTTP(response, request)
 
 	body := response.Body.String()
-	if !strings.Contains(body, `data-hosts="[{&#34;index&#34;:0,&#34;name&#34;:&#34;test&#34;,&#34;default&#34;:true}]"`) {
+	if !strings.Contains(body, `data-hosts="[{&#34;index&#34;:0,&#34;name&#34;:&#34;test&#34;,&#34;host_name&#34;:&#34;https://example.test&#34;,&#34;default&#34;:true}]"`) {
 		t.Fatalf("expected remote host config, got %q", body)
 	}
 	if !strings.Contains(body, `data-host-control`) {

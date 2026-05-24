@@ -88,6 +88,18 @@
     chartTrigger: document.querySelector("[data-chart-trigger]"),
     chartSummary: document.querySelector("[data-chart-summary]"),
     chartList: document.querySelector("[data-chart-list]"),
+    hostInfoTrigger: document.querySelector("[data-host-info-trigger]"),
+    hostModal: document.querySelector("[data-host-modal]"),
+    hostModalClose: document.querySelector("[data-host-modal-close]"),
+    hostModalTitle: document.querySelector("[data-host-modal-title]"),
+    hostModalHostName: document.querySelector("[data-host-modal-host-name]"),
+    hostModalDriverVersion: document.querySelector("[data-host-modal-driver-version]"),
+    hostModalCUDAVersion: document.querySelector("[data-host-modal-cuda-version]"),
+    hostModalGPUCount: document.querySelector("[data-host-modal-gpu-count]"),
+    hostModalMemoryTotal: document.querySelector("[data-host-modal-memory-total]"),
+    hostModalMemoryUsed: document.querySelector("[data-host-modal-memory-used]"),
+    hostModalMemoryFree: document.querySelector("[data-host-modal-memory-free]"),
+    hostModalGPUUtilization: document.querySelector("[data-host-modal-gpu-utilization]"),
     timeMinutes: document.querySelector("[data-time-minutes]"),
     statusDot: document.querySelector("[data-status-dot]"),
     statusTooltip: document.querySelector("[data-status-tooltip]"),
@@ -166,6 +178,13 @@
 
     dom.gpuTrigger.addEventListener("click", () => toggleDropdown(dom.gpuDropdown));
     dom.chartTrigger.addEventListener("click", () => toggleDropdown(dom.chartDropdown));
+    dom.hostInfoTrigger.addEventListener("click", openHostModal);
+    dom.hostModalClose.addEventListener("click", closeHostModal);
+    dom.hostModal.addEventListener("click", (event) => {
+      if (event.target === dom.hostModal) {
+        closeHostModal();
+      }
+    });
     dom.timeInputLabel.addEventListener("click", () => focusTimeInput());
     dom.timeMinutes.addEventListener("focus", () => openDropdown(dom.timeDropdown, false));
     dom.timeMinutes.addEventListener("change", applyTimeInput);
@@ -204,6 +223,7 @@
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape") {
         closeDropdowns();
+        closeHostModal();
       }
     });
 
@@ -369,7 +389,11 @@
       state.selectedIds = resolveSelectedDeviceIds(available);
     }
 
-    state.samples.push({ time: Number.isFinite(collectedAt) ? collectedAt : Date.now(), devices: normalized });
+    state.samples.push({
+      time: Number.isFinite(collectedAt) ? collectedAt : Date.now(),
+      devices: normalized,
+      system: payload.snapshot && payload.snapshot.system ? payload.snapshot.system : {},
+    });
     renderAll();
   }
 
@@ -383,6 +407,9 @@
     renderDevices();
     renderControlSummaries();
     renderSummary();
+    if (!dom.hostModal.hidden) {
+      renderHostModal();
+    }
     for (const chart of charts.values()) {
       drawChart(chart);
     }
@@ -489,6 +516,31 @@
     dom.hostControl.appendChild(label);
   }
 
+  function openHostModal() {
+    closeDropdowns();
+    renderHostModal();
+    dom.hostModal.hidden = false;
+    dom.hostModalClose.focus();
+  }
+
+  function closeHostModal() {
+    dom.hostModal.hidden = true;
+  }
+
+  function renderHostModal() {
+    const system = latestSystemInfo();
+    const memory = hostMemorySummary();
+    dom.hostModalTitle.textContent = currentHostName();
+    dom.hostModalHostName.textContent = textOrNA(system.host_name || currentHostAddress());
+    dom.hostModalDriverVersion.textContent = textOrNA(system.driver_version);
+    dom.hostModalCUDAVersion.textContent = textOrNA(system.cuda_driver_version);
+    dom.hostModalGPUCount.textContent = String(memory.gpuCount);
+    dom.hostModalMemoryTotal.innerHTML = formatHostMemoryHTML(memory.totalBytes, memory.hasMemory);
+    dom.hostModalMemoryUsed.innerHTML = formatHostMemoryPercentHTML(memory.usedBytes, memory);
+    dom.hostModalMemoryFree.innerHTML = formatHostMemoryPercentHTML(memory.freeBytes, memory);
+    dom.hostModalGPUUtilization.innerHTML = formatHostPercentHTML(hostAverageGPUUtilization());
+  }
+
   function updatePageTitle() {
     document.title = `${basePageTitle} - ${currentHostName()}`;
   }
@@ -496,8 +548,57 @@
   function currentHostName() {
     if (hostOptions.length === 0) return "local";
 
-    const selectedHost = hostOptions.find((host) => host.index === state.hostIndex);
+    const selectedHost = currentHostOption();
     return selectedHost ? selectedHost.name : "local";
+  }
+
+  function currentHostAddress() {
+    if (hostOptions.length === 0) return window.location.host || "local";
+
+    const selectedHost = currentHostOption();
+    return selectedHost ? selectedHost.hostName : "n/a";
+  }
+
+  function currentHostOption() {
+    return hostOptions.find((host) => host.index === state.hostIndex);
+  }
+
+  function latestSystemInfo() {
+    const latest = state.samples[state.samples.length - 1];
+    return latest && latest.system ? latest.system : {};
+  }
+
+  function hostMemorySummary() {
+    const latest = state.samples[state.samples.length - 1];
+    const devices = latest ? [...latest.devices.values()] : [];
+    return devices.reduce(
+      (summary, device) => {
+        summary.gpuCount += 1;
+        if (!device.memory) {
+          return summary;
+        }
+        summary.totalBytes += Number(device.memory.total_bytes || 0);
+        summary.usedBytes += Number(device.memory.used_bytes || 0);
+        summary.freeBytes += Number(device.memory.free_bytes || 0);
+        summary.hasMemory = true;
+        return summary;
+      },
+      { gpuCount: 0, totalBytes: 0, usedBytes: 0, freeBytes: 0, hasMemory: false },
+    );
+  }
+
+  function hostAverageGPUUtilization() {
+    const latest = state.samples[state.samples.length - 1];
+    const devices = latest ? [...latest.devices.values()] : [];
+    let total = 0;
+    let count = 0;
+    for (const device of devices) {
+      const value = numberOrNull(device.utilization && device.utilization.gpu_percent);
+      if (value === null) continue;
+      total += value;
+      count += 1;
+    }
+    return count === 0 ? null : total / count;
   }
 
   function renderGPUSummary() {
@@ -1018,6 +1119,22 @@
     return value.toFixed(2);
   }
 
+  function formatHostMemoryHTML(summaryBytes, hasMemory) {
+    if (!hasMemory) return "n/a";
+    return `<span class="host-metric-number">${formatNumber(bytesToGiB(summaryBytes))}</span> <span class="host-metric-unit">GiB</span>`;
+  }
+
+  function formatHostMemoryPercentHTML(summaryBytes, memory) {
+    if (!memory.hasMemory || memory.totalBytes <= 0) return "n/a";
+    const percent = (summaryBytes / memory.totalBytes) * 100;
+    return `${formatHostMemoryHTML(summaryBytes, true)} <span class="host-metric-percent">(${formatNumber(percent)}%)</span>`;
+  }
+
+  function formatHostPercentHTML(value) {
+    if (value === null) return "n/a";
+    return `<span class="host-metric-number">${formatNumber(value)}</span><span class="host-metric-unit">%</span>`;
+  }
+
   function formatTime(value) {
     return new Intl.DateTimeFormat(undefined, {
       hour: "2-digit",
@@ -1046,6 +1163,11 @@
 
   function numberOrNull(value) {
     return typeof value === "number" && Number.isFinite(value) ? value : null;
+  }
+
+  function textOrNA(value) {
+    const text = String(value || "").trim();
+    return text === "" ? "n/a" : text;
   }
 
   function deviceId(device) {
@@ -1113,9 +1235,10 @@
         .map((host) => ({
           index: Number(host.index),
           name: String(host.name || "").trim(),
+          hostName: String(host.host_name || "").trim(),
           default: Boolean(host.default),
         }))
-        .filter((host) => Number.isInteger(host.index) && host.index >= 0 && host.name !== "");
+        .filter((host) => Number.isInteger(host.index) && host.index >= 0 && host.name !== "" && host.hostName !== "");
     } catch {
       return [];
     }

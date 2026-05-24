@@ -45,6 +45,10 @@ func (provider *DebugProvider) List(ctx context.Context, includeProcesses bool) 
 	driverVersion := "debug-driver"
 	nvmlVersion := "debug-nvml-disabled"
 	cudaVersion := "debug-cuda"
+	hostName := "debug-host"
+	if value, err := os.Hostname(); err == nil && strings.TrimSpace(value) != "" {
+		hostName = value
+	}
 
 	devices := make([]gpuinfo.Device, 0, provider.count)
 	for index := range provider.count {
@@ -53,6 +57,7 @@ func (provider *DebugProvider) List(ctx context.Context, includeProcesses bool) 
 
 	return gpuinfo.Snapshot{
 		System: gpuinfo.SystemInfo{
+			HostName:          &hostName,
 			DriverVersion:     &driverVersion,
 			NVMLVersion:       &nvmlVersion,
 			CUDADriverVersion: &cudaVersion,

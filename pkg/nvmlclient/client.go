@@ -3,6 +3,7 @@ package nvmlclient
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/NVIDIA/go-nvml/pkg/nvml"
@@ -202,6 +203,9 @@ func (c *Client) systemInfo() (gpuinfo.SystemInfo, []gpuinfo.Warning) {
 			Field:   field,
 			Message: c.lib.ErrorString(ret),
 		})
+	}
+	if value, err := os.Hostname(); err == nil && strings.TrimSpace(value) != "" {
+		info.HostName = ptr(value)
 	}
 	if value, ret := c.lib.SystemGetDriverVersion(); ret == nvml.SUCCESS {
 		info.DriverVersion = ptr(value)

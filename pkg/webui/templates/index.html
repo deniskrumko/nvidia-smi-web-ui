@@ -38,6 +38,8 @@
       </div>
     </div>
 
+    <button class="host-info-trigger" type="button" data-host-info-trigger aria-label="Host information" title="Host information">i</button>
+
     <div class="topbar-spacer"></div>
 
     <div class="control-section" aria-live="polite">
@@ -83,5 +85,46 @@
   <footer class="app-footer">
     <a href="https://github.com/deniskrumko/nvidia-smi-web-ui" target="_blank" rel="noreferrer">deniskrumko/nvidia-smi-web-ui {{.Version}}</a>
   </footer>
+
+  <div class="host-modal" data-host-modal hidden>
+    <div class="host-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="host-modal-title">
+      <button class="host-modal-close" type="button" data-host-modal-close aria-label="Close host information">&times;</button>
+      <h2 id="host-modal-title" data-host-modal-title>Host</h2>
+      <dl class="host-modal-details">
+        <div class="host-info-card">
+          <dt>HOST_NAME</dt>
+          <dd data-host-modal-host-name>n/a</dd>
+        </div>
+        <div class="host-info-card">
+          <dt>Driver version</dt>
+          <dd data-host-modal-driver-version>n/a</dd>
+        </div>
+        <div class="host-info-card">
+          <dt>CUDA version</dt>
+          <dd data-host-modal-cuda-version>n/a</dd>
+        </div>
+        <div class="host-info-card">
+          <dt>GPU devices</dt>
+          <dd data-host-modal-gpu-count>0</dd>
+        </div>
+        <div class="host-info-card">
+          <dt>Total VRAM</dt>
+          <dd data-host-modal-memory-total>n/a</dd>
+        </div>
+        <div class="host-info-card">
+          <dt>Used VRAM</dt>
+          <dd data-host-modal-memory-used>n/a</dd>
+        </div>
+        <div class="host-info-card">
+          <dt>Free VRAM</dt>
+          <dd data-host-modal-memory-free>n/a</dd>
+        </div>
+        <div class="host-info-card">
+          <dt>GPU utilization</dt>
+          <dd data-host-modal-gpu-utilization>n/a</dd>
+        </div>
+      </dl>
+    </div>
+  </div>
 </main>
 {{end}}

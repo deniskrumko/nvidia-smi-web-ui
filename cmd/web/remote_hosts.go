@@ -107,9 +107,10 @@ func remoteHostsFromValues(environ []string) ([]webapp.RemoteHost, error) {
 		}
 
 		hosts = append(hosts, webapp.RemoteHost{
-			Name:    config.displayName,
-			URL:     hostURL,
-			Default: config.isDefault,
+			Name:     config.displayName,
+			HostName: config.hostName,
+			URL:      hostURL,
+			Default:  config.isDefault,
 		})
 	}
 

@@ -15,6 +15,7 @@ type ProcessSnapshot struct {
 
 // SystemInfo describes the NVIDIA software stack available through NVML.
 type SystemInfo struct {
+	HostName          *string `json:"host_name,omitempty"`
 	DriverVersion     *string `json:"driver_version,omitempty"`
 	NVMLVersion       *string `json:"nvml_version,omitempty"`
 	CUDADriverVersion *string `json:"cuda_driver_version,omitempty"`

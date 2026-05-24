@@ -116,10 +116,10 @@ func TestRemoteHostsFromEnv(t *testing.T) {
 	if len(hosts) != 2 {
 		t.Fatalf("expected 2 hosts, got %d", len(hosts))
 	}
-	if hosts[0].Name != "lab" || hosts[0].URL != "https://nvidia-web-ui-rnd-kube.kolesa-team.org/api/gpus" || hosts[0].Default {
+	if hosts[0].Name != "lab" || hosts[0].HostName != "nvidia-web-ui-rnd-kube.kolesa-team.org" || hosts[0].URL != "https://nvidia-web-ui-rnd-kube.kolesa-team.org/api/gpus" || hosts[0].Default {
 		t.Fatalf("unexpected first host: %#v", hosts[0])
 	}
-	if hosts[1].Name != "stage" || hosts[1].URL != "http://127.0.0.1:9090/api/custom-gpus" || !hosts[1].Default {
+	if hosts[1].Name != "stage" || hosts[1].HostName != "http://127.0.0.1:9090" || hosts[1].URL != "http://127.0.0.1:9090/api/custom-gpus" || !hosts[1].Default {
 		t.Fatalf("unexpected second host: %#v", hosts[1])
 	}
 }
